@@ -1,6 +1,16 @@
 # Devlog
 
+## 2026-07-14 — Deploy Vercel (Vite)
+
+### Problema
+Vercel fallaba con “No Next.js version detected” porque el preset del proyecto era Next.js.
+
+### Decisión
+- Agregar `vercel.json` con `"framework": "vite"`, `buildCommand` y `outputDirectory: dist`.
+- Rewrite SPA a `index.html` para React Router (excepto `/assets`).
+
 ## 2026-07-14 — Revisión quirúrgica B0.1
+
 
 ### Bugs encontrados y corregidos
 1. **Folio leak**: `buildRemision()` llamaba `createFolio()` en cada PDF/guardar sin fijar identidad → folios quemados y desalineados.

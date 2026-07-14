@@ -1,6 +1,12 @@
 # Changelog
 
+## [0.1.2] — 2026-07-14
+
+### Corregido
+- Deploy Vercel: proyecto es Vite (no Next.js); se agrega `vercel.json` con framework vite y rewrite SPA
+
 ## [0.1.1] — 2026-07-14
+
 
 ### Corregido
 - Folio/id se asignan una sola vez (PDF previo a guardar ya no quema folios)
