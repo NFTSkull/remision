@@ -324,8 +324,34 @@ select:focus {
 }
 
 .conceptos-table th:nth-child(3),
-.conceptos-table td:nth-child(3) {
-  min-width: 180px;
+.conceptos-table td:nth-child(3),
+.conceptos-table .col-concepto {
+  min-width: 220px;
+  width: 32%;
+}
+
+.conceptos-table textarea {
+  width: 100%;
+  min-width: 200px;
+  min-height: 44px;
+  resize: vertical;
+  padding: 0.35rem 0.5rem;
+  font-size: 0.85rem;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  font-family: inherit;
+  color: var(--gris-texto);
+}
+
+.conceptos-table .col-sat {
+  min-width: 100px;
+  width: 110px;
+}
+
+.conceptos-table .col-sat input {
+  min-width: 90px;
+  font-family: ui-monospace, monospace;
+  font-size: 0.8rem;
 }
 
 .conceptos-table th:nth-child(4),

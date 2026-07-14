@@ -52,9 +52,10 @@ export function ConceptosTable({
                 <tr>
                   <th>Cantidad</th>
                   <th>Unidad</th>
-                  <th>Concepto</th>
+                  <th className="col-concepto">Concepto</th>
                   <th>Precio unitario</th>
                   <th>Importe</th>
+                  <th className="col-sat">Código SAT</th>
                   <th></th>
                 </tr>
               </thead>
@@ -81,9 +82,9 @@ export function ConceptosTable({
                         }
                       />
                     </td>
-                    <td>
-                      <input
-                        type="text"
+                    <td className="col-concepto">
+                      <textarea
+                        rows={2}
                         value={item.concepto}
                         onChange={(e) =>
                           onUpdate(item.id, 'concepto', e.target.value)
@@ -103,6 +104,17 @@ export function ConceptosTable({
                     </td>
                     <td className="importe-cell">
                       {formatCurrencyMXN(item.importe)}
+                    </td>
+                    <td className="col-sat">
+                      <input
+                        type="text"
+                        value={item.sat_code ?? ''}
+                        onChange={(e) =>
+                          onUpdate(item.id, 'sat_code', e.target.value)
+                        }
+                        placeholder="00000000"
+                        title={item.sat_description ?? ''}
+                      />
                     </td>
                     <td>
                       <button
@@ -128,6 +140,10 @@ export function ConceptosTable({
               </span>
             )}
           </div>
+          <p className="formula-note">
+            La nota de remisión no sustituye CFDI; los códigos SAT son
+            referenciales para control interno.
+          </p>
         </>
       ) : (
         <p className="empty-state">

@@ -31,6 +31,7 @@ const emptyForm = (): RemisionFormData => ({
   plazo: '',
   tipo_remodelacion: '',
   iva_mode: 'incluido',
+  area_m2: null,
 });
 
 interface Identity {
@@ -53,6 +54,7 @@ export function useRemisionForm(initialRemision?: Remision | null) {
           plazo: initialRemision.plazo,
           tipo_remodelacion: initialRemision.tipo_remodelacion,
           iva_mode: initialRemision.iva_mode,
+          area_m2: initialRemision.area_m2 ?? null,
         }
       : emptyForm(),
   );
@@ -123,6 +125,7 @@ export function useRemisionForm(initialRemision?: Remision | null) {
       plazo: form.plazo,
       ivaMode: form.iva_mode,
       catalogo: CATALOGO_MATERIALES,
+      areaM2: form.area_m2,
     });
 
     setItems(generated);
@@ -140,6 +143,7 @@ export function useRemisionForm(initialRemision?: Remision | null) {
         concepto: '',
         precio_unitario: 0,
         importe: 0,
+        sat_code: '',
       },
     ]);
   }, []);
@@ -187,6 +191,7 @@ export function useRemisionForm(initialRemision?: Remision | null) {
       plazo: form.plazo.trim(),
       tipo_remodelacion: form.tipo_remodelacion as TipoRemodelacion,
       iva_mode: form.iva_mode as IvaMode,
+      area_m2: form.area_m2 ?? null,
       subtotal: totals.subtotal,
       iva: totals.iva,
       total: totals.total,

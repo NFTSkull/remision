@@ -1,5 +1,8 @@
+/**
+ * Generación profesional de partidas de remisión.
+ * Sistemas coherentes, cantidades acotadas y remanente repartido en servicios reales.
+ */
 import { v4 as uuidv4 } from 'uuid';
-import { TIPO_TAG_MAP } from '../constants/tiposRemodelacion';
 import type {
   CatalogoMaterial,
   GenerateRemisionItemsParams,
@@ -8,435 +11,1060 @@ import type {
 } from '../types';
 import { normalizeMoney } from './normalizeMoney';
 
-const AJUSTABLES = [
-  'Mano de obra especializada',
-  'Servicio de instalación general',
-  'Material complementario (ajuste)',
-] as const;
+type LineRole =
+  | 'principal'
+  | 'complemento'
+  | 'herramienta'
+  | 'servicio'
+  | 'mano_obra'
+  | 'servicio_flex';
 
-const CATEGORIAS_NO_MATERIAL = new Set([
-  'Mano de obra',
-  'Servicios',
-  'Flete / acarreo',
-  'Retiro de escombro',
-  'Herramienta menor',
-]);
-
-/** Conceptos prioritarios por tipo (nombre debe coincidir parcialmente) */
-const TIPO_PRIORITY: Partial<Record<TipoRemodelacion, string[]>> = {
-  Baño: [
-    'sanitario',
-    'lavabo',
-    'mezcladora',
-    'regadera',
-    'azulejo',
-    'piso',
-    'pegazulejo',
-    'tubería',
-    'mano de obra',
-  ],
-  Cocina: [
-    'tarja',
-    'mezcladora',
-    'cubierta',
-    'piso',
-    'azulejo',
-    'mueble base',
-    'campana',
-    'mano de obra',
-  ],
-  Sala: ['pintura', 'piso', 'pasta', 'yeso', 'lámpara', 'contacto', 'zoclo', 'resane', 'mano de obra'],
-  'Piso / azulejo': [
-    'piso',
-    'porcelanato',
-    'pegazulejo',
-    'boquilla',
-    'crucetas',
-    'zoclo',
-    'nivelador',
-    'cemento',
-    'mano de obra',
-  ],
-  'Techo / impermeabilización': [
-    'impermeabilizante',
-    'sellador',
-    'malla',
-    'cepillo',
-    'rodillo',
-    'resanador',
-    'mano de obra',
-  ],
-  Eléctrico: [
-    'cable',
-    'contacto',
-    'apagador',
-    'centro de carga',
-    'pastilla',
-    'conduit',
-    'chalupa',
-    'lámpara',
-    'mano de obra',
-  ],
-  Plomería: [
-    'tubería',
-    'codo',
-    'tee',
-    'llave',
-    'válvula',
-    'cemento pvc',
-    'teflón',
-    'mezcladora',
-    'mano de obra',
-  ],
-  Fachada: ['pintura exterior', 'sellador', 'impermeabilizante', 'resanador', 'andamio', 'mano de obra'],
-  'Patio / exterior': [
-    'piso exterior',
-    'cemento',
-    'arena',
-    'grava',
-    'pintura exterior',
-    'drenaje',
-    'luminaria',
-    'mano de obra',
-  ],
-};
-
-/** Exclusiones por nombre: evita contaminar tipologías cercanas */
-const TIPO_EXCLUDE_NOMBRE: Partial<Record<TipoRemodelacion, RegExp>> = {
-  Cocina:
-    /sanitario|regadera|cancel de baño|tina de baño|lavabo sobreponer|espejo con luminaria/i,
-  Baño: /tarja|campana extractora|mueble base cocina|alacena cocina|salpicadero|cubierta granito|cubierta postformada/i,
-  'Techo / impermeabilización': /sanitario|lavabo|regadera|tarja|mezcladora lavabo/i,
-  'Piso / azulejo': /sanitario|regadera|tarja|cable thw|centro de carga/i,
-  Eléctrico: /sanitario|regadera|tarja|pegazulejo|impermeabilizante|mezcladora/i,
-  Plomería: /sanitario|regadera|cancel de baño|tina de baño|campana extractora|tarja|alacena/i,
-};
-
-function randomInRange(min: number, max: number): number {
-  return min + Math.random() * (max - min);
+interface QtyContext {
+  areaM2: number;
+  totalRemision: number;
 }
+
+interface RecipeLine {
+  ids: string[];
+  role: LineRole;
+  qty: (ctx: QtyContext) => number;
+  soft?: boolean;
+  concepto?: string;
+}
+
+interface Sistema {
+  nombre: string;
+  lineas: RecipeLine[];
+  balancePoolIds?: string[];
+}
+
+const BALANCE_POOL_DEFAULT = [
+  'mo-017',
+  'mo-007',
+  'mo-011',
+  'mo-015',
+  'mo-016',
+  'mo-012',
+  'mo-014',
+  'mo-009',
+  'mo-010',
+];
+
+const BAN_WORDS =
+  /\b(ajuste|diferencia|cuadre|relleno|complementario para cerrar|cierre de diferencia)\b/i;
+
+const MAX_SERVICIO_PCT = 0.25;
+const MAX_MO_ESPECIALIZADA_PCT = 0.35;
+const SPLIT_THRESHOLD_PCT = 0.15;
+
+const LIMITE_CANTIDAD_GLOBAL: Record<string, { min: number; max: number }> = {
+  'pin-004': { min: 2, max: 12 },
+  'pin-005': { min: 1, max: 6 },
+  'imp-008': { min: 1, max: 8 },
+  'imp-003': { min: 2, max: 14 },
+  'imp-004': { min: 2, max: 10 },
+  'imp-001': { min: 2, max: 12 },
+  'con-021': { min: 2, max: 12 },
+  'con-020': { min: 2, max: 15 },
+  'imp-002': { min: 1, max: 8 },
+  'pin-008': { min: 2, max: 12 },
+  'imp-005': { min: 2, max: 8 },
+  'pin-009': { min: 2, max: 8 },
+  'her-005': { min: 1, max: 10 },
+  'ext-008': { min: 1, max: 10 },
+  'con-008': { min: 20, max: 120 },
+  'con-010': { min: 4, max: 30 },
+  'con-011': { min: 4, max: 30 },
+};
+
+const ROLE_ORDER: LineRole[] = [
+  'principal',
+  'complemento',
+  'herramienta',
+  'servicio',
+  'mano_obra',
+  'servicio_flex',
+];
 
 function randomInt(min: number, max: number): number {
-  return Math.floor(randomInRange(min, max + 1));
+  return Math.floor(min + Math.random() * (max - min + 1));
 }
 
-function getPartidasCount(totalRemision: number): number {
-  if (totalRemision < 50_000) return randomInt(5, 8);
-  if (totalRemision < 150_000) return randomInt(8, 14);
-  return randomInt(14, 22);
+function clamp(n: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, n));
 }
 
-function isManoObra(item: CatalogoMaterial): boolean {
-  return item.categoria === 'Mano de obra';
+function pickOne<T>(arr: T[]): T {
+  return arr[randomInt(0, arr.length - 1)];
 }
 
-function isServicioAuxiliar(item: CatalogoMaterial): boolean {
-  return (
-    item.categoria === 'Servicios' ||
-    item.categoria === 'Flete / acarreo' ||
-    item.categoria === 'Retiro de escombro' ||
-    item.categoria === 'Herramienta menor'
-  );
+function byId(catalogo: CatalogoMaterial[], id: string): CatalogoMaterial | undefined {
+  return catalogo.find((c) => c.id === id);
 }
 
-function isMaterial(item: CatalogoMaterial): boolean {
-  return !CATEGORIAS_NO_MATERIAL.has(item.categoria);
-}
-
-function coincideExcludeNombre(
-  material: CatalogoMaterial,
-  tipo: TipoRemodelacion,
-): boolean {
-  const re = TIPO_EXCLUDE_NOMBRE[tipo];
-  return re ? re.test(material.nombre) : false;
-}
-
-function filterCatalogo(
+function firstAvailable(
   catalogo: CatalogoMaterial[],
-  tipoRemodelacion: TipoRemodelacion,
-): {
-  materiales: CatalogoMaterial[];
-  servicios: CatalogoMaterial[];
-  manoObra: CatalogoMaterial[];
-} {
-  const tags = TIPO_TAG_MAP[tipoRemodelacion];
+  ids: string[],
+): CatalogoMaterial | undefined {
+  for (const id of ids) {
+    const found = byId(catalogo, id);
+    if (found) return found;
+  }
+  return undefined;
+}
 
-  const filtered = catalogo.filter(
-    (m) =>
-      m.tags.some((t) => tags.includes(t)) &&
-      !coincideExcludeNombre(m, tipoRemodelacion),
-  );
+export function estimateAreaM2(
+  tipo: TipoRemodelacion,
+  totalRemision: number,
+  areaUsuario?: number | null,
+): number {
+  if (areaUsuario && areaUsuario > 0) {
+    return clamp(Math.round(areaUsuario), 4, 400);
+  }
 
-  return {
-    materiales: filtered.filter(isMaterial),
-    manoObra: filtered.filter(isManoObra),
-    servicios: filtered.filter(isServicioAuxiliar),
+  const costoPorM2: Record<string, number> = {
+    'Techo / impermeabilización': 1100,
+    'Piso / azulejo': 900,
+    Pintura: 350,
+    Fachada: 450,
+    Baño: 4500,
+    Cocina: 4000,
+    Sala: 900,
+    Recámara: 900,
+    'Patio / exterior': 700,
+    Lavandería: 5000,
+    Eléctrico: 1200,
+    Plomería: 1500,
+    'Ampliación ligera': 2200,
+    'Remodelación general': 1400,
+    'Mantenimiento general': 800,
   };
-}
 
-function priorityScore(material: CatalogoMaterial, tipo: TipoRemodelacion): number {
-  const keywords = TIPO_PRIORITY[tipo] ?? [];
-  const nombre = material.nombre.toLowerCase();
-  return keywords.reduce((score, kw) => (nombre.includes(kw.toLowerCase()) ? score + 2 : score), 0);
-}
+  const divisor = costoPorM2[tipo] ?? 1200;
+  let area = totalRemision / divisor;
 
-function shuffle<T>(arr: T[]): T[] {
-  const copy = [...arr];
-  for (let i = copy.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [copy[i], copy[j]] = [copy[j], copy[i]];
-  }
-  return copy;
-}
-
-function calcularCantidadRealista(material: CatalogoMaterial, importeObjetivo: number): number {
-  const precio = material.precio_sugerido;
-  if (precio <= 0) return 1;
-
-  let cantidad = importeObjetivo / precio;
-
-  switch (material.unidad) {
-    case 'saco':
-    case 'caja':
-    case 'bote':
-    case 'cubeta':
-    case 'pieza':
-    case 'rollo':
-    case 'paquete':
-    case 'juego':
-    case 'jornal':
-    case 'día':
-    case 'viaje':
-    case 'servicio':
-      cantidad = Math.max(1, Math.round(cantidad));
-      break;
-    case 'm²':
-    case 'm³':
-    case 'm':
-    case 'kg':
-      cantidad = Math.max(1, Math.round(cantidad * 2) / 2);
-      break;
-    default:
-      cantidad = Math.max(1, Math.round(cantidad * 10) / 10);
+  if (tipo === 'Baño' || tipo === 'Cocina' || tipo === 'Lavandería') {
+    area = clamp(area, 4, 18);
+  } else if (tipo === 'Techo / impermeabilización') {
+    area = clamp(area, 25, 160);
+  } else if (tipo === 'Piso / azulejo' || tipo === 'Sala' || tipo === 'Recámara') {
+    area = clamp(area, 12, 120);
+  } else {
+    area = clamp(area, 10, 180);
   }
 
-  return cantidad;
+  return Math.round(area);
 }
 
-function crearItem(material: CatalogoMaterial, cantidad: number): RemisionItem {
-  const precio = material.precio_sugerido;
+function sanitizarConcepto(nombre: string): string {
+  if (!BAN_WORDS.test(nombre)) return nombre;
+  return nombre
+    .replace(/\(ajuste\)/gi, '')
+    .replace(/\bajuste\b/gi, '')
+    .replace(/\bdiferencia\b/gi, '')
+    .replace(/\bcuadre\b/gi, '')
+    .replace(/\brelleno\b/gi, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function esManoObraEspecializada(concepto: string): boolean {
+  return /mano de obra especializada/i.test(concepto);
+}
+
+function esServicioCapado(item: RemisionItem): boolean {
+  if (item.unidad === 'm²' && /mano de obra impermeabilizaci/i.test(item.concepto)) {
+    return false; // justificado por m²
+  }
+  return (
+    item.unidad === 'servicio' ||
+    /preparaci|aplicaci|refuerzo|limpieza|flete|acarreo|supervisi|herramienta y consumibles|mano de obra especializada/i.test(
+      item.concepto,
+    )
+  );
+}
+
+function topeImporte(concepto: string, totalRemision: number): number {
+  const pct = esManoObraEspecializada(concepto)
+    ? MAX_MO_ESPECIALIZADA_PCT
+    : MAX_SERVICIO_PCT;
+  return normalizeMoney(totalRemision * pct);
+}
+
+function crearItemDesdeCatalogo(
+  material: CatalogoMaterial,
+  cantidad: number,
+  precioOverride?: number,
+  conceptoOverride?: string,
+): RemisionItem {
+  const qty = Math.max(0.01, cantidad);
+  const precio = precioOverride ?? material.precio_sugerido;
   return {
     id: uuidv4(),
-    cantidad,
+    cantidad: qty,
     unidad: material.unidad,
-    concepto: material.nombre,
-    precio_unitario: precio,
-    importe: normalizeMoney(cantidad * precio),
+    concepto: sanitizarConcepto(conceptoOverride ?? material.nombre),
+    precio_unitario: normalizeMoney(precio),
+    importe: normalizeMoney(qty * precio),
+    sat_code: material.sat_code,
+    sat_description: material.sat_description,
     fuente_nombre: material.fuente_nombre,
     fuente_url: material.fuente_url,
   };
 }
 
-function seleccionarProductos(
-  pool: CatalogoMaterial[],
-  count: number,
-  tipo: TipoRemodelacion,
-): CatalogoMaterial[] {
-  if (pool.length === 0 || count <= 0) return [];
+function aplicarLimiteCantidad(id: string, qty: number): number {
+  const lim = LIMITE_CANTIDAD_GLOBAL[id];
+  if (!lim) return Math.max(1, Math.round(qty * 100) / 100);
+  return clamp(Math.round(qty), lim.min, lim.max);
+}
 
-  const ranked = shuffle([...pool]).sort(
-    (a, b) => priorityScore(b, tipo) - priorityScore(a, tipo),
-  );
+function setImporte(item: RemisionItem, importe: number): RemisionItem {
+  const cantidad = item.cantidad > 0 ? item.cantidad : 1;
+  const imp = normalizeMoney(Math.max(0.01, importe));
+  return {
+    ...item,
+    cantidad,
+    importe: imp,
+    precio_unitario: normalizeMoney(imp / cantidad),
+  };
+}
 
-  const selected: CatalogoMaterial[] = [];
-  const usedIds = new Set<string>();
+// ─── Recetas ──────────────────────────────────────────────────────────────────
 
-  for (const item of ranked) {
-    if (selected.length >= count) break;
-    if (!usedIds.has(item.id)) {
-      selected.push(item);
-      usedIds.add(item.id);
+function sistemasTecho(): Sistema[] {
+  const qtyAcrilico = (ctx: QtyContext) =>
+    aplicarLimiteCantidad('pin-004', Math.ceil(ctx.areaM2 / 8));
+  const qtySellador = (ctx: QtyContext) =>
+    aplicarLimiteCantidad('pin-005', Math.ceil(ctx.areaM2 / 20));
+  const qtyPrimario = (ctx: QtyContext) =>
+    aplicarLimiteCantidad('imp-008', Math.ceil(ctx.areaM2 / 22));
+  const qtyMalla = (ctx: QtyContext) =>
+    aplicarLimiteCantidad('imp-002', Math.ceil(ctx.areaM2 / 45));
+  const qtyResanador = (ctx: QtyContext) =>
+    aplicarLimiteCantidad('con-020', Math.ceil(ctx.areaM2 / 12));
+  const qtyRodillo = (ctx: QtyContext) =>
+    aplicarLimiteCantidad('pin-008', clamp(Math.ceil(ctx.areaM2 / 25), 2, 12));
+  const qtyCepillo = () => aplicarLimiteCantidad('imp-005', randomInt(2, 5));
+  const qtyAndamio = (ctx: QtyContext) =>
+    ctx.areaM2 > 50 ? aplicarLimiteCantidad('ext-008', randomInt(2, 6)) : 0;
+  const qtyMO = (ctx: QtyContext) => ctx.areaM2;
+
+  const balancePoolIds = [
+    'mo-017',
+    'mo-011',
+    'mo-015',
+    'mo-016',
+    'mo-012',
+    'mo-014',
+    'mo-009',
+    'mo-010',
+  ];
+
+  return [
+    {
+      nombre: 'acrilico',
+      balancePoolIds,
+      lineas: [
+        {
+          ids: ['pin-004'],
+          role: 'principal',
+          qty: qtyAcrilico,
+          concepto: 'Aplicación de impermeabilizante acrílico',
+        },
+        { ids: ['pin-005'], role: 'complemento', qty: qtySellador, concepto: 'Sellador acrílico' },
+        {
+          ids: ['imp-008'],
+          role: 'complemento',
+          qty: qtyPrimario,
+          concepto: 'Primario para impermeabilizante',
+        },
+        {
+          ids: ['imp-002'],
+          role: 'complemento',
+          qty: qtyMalla,
+          concepto: 'Refuerzo de puntos críticos con malla',
+        },
+        { ids: ['con-020'], role: 'complemento', qty: qtyResanador },
+        { ids: ['pin-006'], role: 'herramienta', qty: qtyRodillo },
+        { ids: ['imp-005'], role: 'herramienta', qty: qtyCepillo },
+        { ids: ['ext-008', 'her-005'], role: 'herramienta', qty: qtyAndamio },
+        { ids: ['mo-013'], role: 'servicio', qty: () => 1 },
+        { ids: ['mo-014', 'fle-001'], role: 'servicio', qty: () => 1 },
+        { ids: ['mo-006'], role: 'mano_obra', qty: qtyMO, soft: true },
+        { ids: ['mo-011'], role: 'servicio_flex', qty: () => 1, soft: true },
+        { ids: ['mo-015'], role: 'servicio_flex', qty: () => 1, soft: true },
+        { ids: ['mo-016'], role: 'servicio_flex', qty: () => 1, soft: true },
+        { ids: ['mo-017'], role: 'servicio_flex', qty: () => 1, soft: true },
+        { ids: ['mo-012'], role: 'servicio_flex', qty: () => 1, soft: true },
+        { ids: ['mo-010'], role: 'servicio_flex', qty: () => 1, soft: true },
+        { ids: ['mo-009'], role: 'servicio_flex', qty: () => 1, soft: true },
+      ],
+    },
+    {
+      nombre: 'prefabricado',
+      balancePoolIds,
+      lineas: [
+        {
+          ids: ['imp-001'],
+          role: 'principal',
+          qty: (ctx) => aplicarLimiteCantidad('imp-001', Math.ceil(ctx.areaM2 / 9)),
+          concepto: 'Aplicación de impermeabilizante prefabricado',
+        },
+        {
+          ids: ['imp-002'],
+          role: 'complemento',
+          qty: qtyMalla,
+          concepto: 'Refuerzo de puntos críticos con malla',
+        },
+        { ids: ['imp-008'], role: 'complemento', qty: qtyPrimario },
+        { ids: ['con-020'], role: 'complemento', qty: qtyResanador },
+        { ids: ['imp-005'], role: 'herramienta', qty: qtyCepillo },
+        { ids: ['ext-008'], role: 'herramienta', qty: qtyAndamio },
+        { ids: ['mo-013'], role: 'servicio', qty: () => 1 },
+        { ids: ['mo-014', 'fle-001'], role: 'servicio', qty: () => 1 },
+        { ids: ['mo-006'], role: 'mano_obra', qty: qtyMO, soft: true },
+        { ids: ['mo-011'], role: 'servicio_flex', qty: () => 1, soft: true },
+        { ids: ['mo-015'], role: 'servicio_flex', qty: () => 1, soft: true },
+        { ids: ['mo-017'], role: 'servicio_flex', qty: () => 1, soft: true },
+        { ids: ['mo-010'], role: 'servicio_flex', qty: () => 1, soft: true },
+        { ids: ['mo-009'], role: 'servicio_flex', qty: () => 1, soft: true },
+      ],
+    },
+    {
+      nombre: 'cementoso',
+      balancePoolIds,
+      lineas: [
+        {
+          ids: ['imp-003', 'con-021'],
+          role: 'principal',
+          qty: (ctx) => aplicarLimiteCantidad('imp-003', Math.ceil(ctx.areaM2 / 7)),
+          concepto: 'Aplicación de impermeabilizante cementoso',
+        },
+        {
+          ids: ['imp-002'],
+          role: 'complemento',
+          qty: qtyMalla,
+          concepto: 'Refuerzo de puntos críticos con malla',
+        },
+        { ids: ['imp-008'], role: 'complemento', qty: qtyPrimario },
+        { ids: ['con-020'], role: 'complemento', qty: qtyResanador },
+        { ids: ['pin-006'], role: 'herramienta', qty: qtyRodillo },
+        { ids: ['mo-014', 'fle-001'], role: 'servicio', qty: () => 1 },
+        { ids: ['mo-006'], role: 'mano_obra', qty: qtyMO, soft: true },
+        { ids: ['mo-011'], role: 'servicio_flex', qty: () => 1, soft: true },
+        { ids: ['mo-015'], role: 'servicio_flex', qty: () => 1, soft: true },
+        { ids: ['mo-016'], role: 'servicio_flex', qty: () => 1, soft: true },
+        { ids: ['mo-017'], role: 'servicio_flex', qty: () => 1, soft: true },
+        { ids: ['mo-009'], role: 'servicio_flex', qty: () => 1, soft: true },
+      ],
+    },
+    {
+      nombre: 'asfaltico',
+      balancePoolIds,
+      lineas: [
+        {
+          ids: ['imp-004'],
+          role: 'principal',
+          qty: (ctx) => aplicarLimiteCantidad('imp-004', Math.ceil(ctx.areaM2 / 9)),
+          concepto: 'Aplicación de impermeabilizante asfáltico',
+        },
+        {
+          ids: ['imp-002'],
+          role: 'complemento',
+          qty: qtyMalla,
+          concepto: 'Refuerzo de puntos críticos con malla',
+        },
+        { ids: ['imp-008'], role: 'complemento', qty: qtyPrimario },
+        { ids: ['con-020'], role: 'complemento', qty: qtyResanador },
+        { ids: ['pin-006'], role: 'herramienta', qty: qtyRodillo },
+        { ids: ['imp-005'], role: 'herramienta', qty: qtyCepillo },
+        { ids: ['mo-013'], role: 'servicio', qty: () => 1 },
+        { ids: ['mo-014', 'fle-001'], role: 'servicio', qty: () => 1 },
+        { ids: ['mo-006'], role: 'mano_obra', qty: qtyMO, soft: true },
+        { ids: ['mo-011'], role: 'servicio_flex', qty: () => 1, soft: true },
+        { ids: ['mo-015'], role: 'servicio_flex', qty: () => 1, soft: true },
+        { ids: ['mo-017'], role: 'servicio_flex', qty: () => 1, soft: true },
+        { ids: ['mo-009'], role: 'servicio_flex', qty: () => 1, soft: true },
+      ],
+    },
+  ];
+}
+
+function sistemaBano(): Sistema {
+  return {
+    nombre: 'bano_estandar',
+    balancePoolIds: ['mo-007', 'mo-008', 'mo-011', 'mo-009', 'mo-014', 'mo-010'],
+    lineas: [
+      { ids: ['ban-002', 'ban-001'], role: 'principal', qty: () => 1 },
+      { ids: ['ban-003'], role: 'principal', qty: () => 1 },
+      { ids: ['ban-005', 'ban-006'], role: 'principal', qty: () => 1 },
+      { ids: ['ban-007', 'ban-008'], role: 'complemento', qty: () => 1 },
+      {
+        ids: ['piso-003'],
+        role: 'principal',
+        qty: (ctx) => clamp(Math.round(ctx.areaM2 * 1.05 * 2) / 2, 4, 16),
+      },
+      {
+        ids: ['piso-004', 'piso-005'],
+        role: 'principal',
+        qty: (ctx) => clamp(Math.ceil((ctx.areaM2 * 2.2) / 1.5), 4, 18),
+      },
+      {
+        ids: ['piso-006'],
+        role: 'complemento',
+        qty: (ctx) => clamp(Math.ceil(ctx.areaM2 / 3), 2, 10),
+      },
+      {
+        ids: ['piso-007'],
+        role: 'complemento',
+        qty: (ctx) => clamp(Math.ceil(ctx.areaM2 / 5), 1, 6),
+      },
+      { ids: ['plo-001'], role: 'complemento', qty: () => randomInt(2, 4) },
+      { ids: ['plo-005'], role: 'complemento', qty: () => randomInt(4, 10) },
+      { ids: ['ban-009'], role: 'herramienta', qty: () => randomInt(2, 4) },
+      { ids: ['plo-010'], role: 'herramienta', qty: () => 1 },
+      { ids: ['mo-014', 'fle-001'], role: 'servicio', qty: () => 1 },
+      { ids: ['esc-001'], role: 'servicio', qty: () => randomInt(1, 2) },
+      {
+        ids: ['mo-002'],
+        role: 'mano_obra',
+        qty: (ctx) => clamp(ctx.areaM2 * 2.5, 10, 40),
+        soft: true,
+      },
+      { ids: ['mo-004'], role: 'mano_obra', qty: () => 1, soft: true },
+      { ids: ['mo-007'], role: 'servicio_flex', qty: () => 1, soft: true },
+      { ids: ['mo-009'], role: 'servicio_flex', qty: () => 1, soft: true },
+    ],
+  };
+}
+
+function sistemaCocina(): Sistema {
+  return {
+    nombre: 'cocina_estandar',
+    balancePoolIds: ['mo-007', 'mo-008', 'mo-009', 'mo-014', 'mo-010'],
+    lineas: [
+      { ids: ['coc-002', 'coc-001'], role: 'principal', qty: () => 1 },
+      { ids: ['coc-003'], role: 'principal', qty: () => 1 },
+      {
+        ids: ['coc-004', 'coc-005'],
+        role: 'principal',
+        qty: (ctx) => clamp(Math.round(ctx.areaM2 * 0.35 * 2) / 2, 2, 6),
+      },
+      { ids: ['coc-006'], role: 'principal', qty: () => randomInt(1, 2) },
+      {
+        ids: ['piso-001', 'piso-002'],
+        role: 'principal',
+        qty: (ctx) => clamp(Math.ceil(ctx.areaM2 / 1.5), 4, 14),
+      },
+      {
+        ids: ['piso-004', 'piso-005'],
+        role: 'complemento',
+        qty: (ctx) => clamp(Math.ceil(ctx.areaM2 / 2), 2, 10),
+      },
+      {
+        ids: ['piso-006'],
+        role: 'complemento',
+        qty: (ctx) => clamp(Math.ceil(ctx.areaM2 / 3), 2, 8),
+      },
+      { ids: ['coc-010', 'ele-004'], role: 'complemento', qty: () => randomInt(4, 8) },
+      { ids: ['ele-013', 'coc-009'], role: 'complemento', qty: () => randomInt(2, 4) },
+      { ids: ['plo-001'], role: 'complemento', qty: () => randomInt(1, 3) },
+      { ids: ['mo-014', 'fle-001'], role: 'servicio', qty: () => 1 },
+      { ids: ['esc-001'], role: 'servicio', qty: () => 1 },
+      {
+        ids: ['mo-002'],
+        role: 'mano_obra',
+        qty: (ctx) => clamp(ctx.areaM2, 6, 20),
+        soft: true,
+      },
+      { ids: ['mo-004'], role: 'mano_obra', qty: () => 1, soft: true },
+      { ids: ['mo-008'], role: 'servicio_flex', qty: () => 1, soft: true },
+      { ids: ['mo-007'], role: 'servicio_flex', qty: () => 1, soft: true },
+      { ids: ['mo-009'], role: 'servicio_flex', qty: () => 1, soft: true },
+    ],
+  };
+}
+
+function sistemaPiso(): Sistema {
+  return {
+    nombre: 'piso_azulejo',
+    balancePoolIds: ['mo-007', 'mo-009', 'mo-011', 'mo-014', 'mo-010'],
+    lineas: [
+      {
+        ids: ['piso-002', 'piso-001'],
+        role: 'principal',
+        qty: (ctx) => clamp(Math.ceil((ctx.areaM2 * 1.08) / 1.5), 6, 40),
+      },
+      {
+        ids: ['piso-006', 'piso-014'],
+        role: 'complemento',
+        qty: (ctx) => clamp(Math.ceil(ctx.areaM2 / 3.5), 3, 18),
+      },
+      {
+        ids: ['piso-007'],
+        role: 'complemento',
+        qty: (ctx) => clamp(Math.ceil(ctx.areaM2 / 6), 2, 10),
+      },
+      {
+        ids: ['piso-011', 'piso-010'],
+        role: 'complemento',
+        qty: (ctx) => clamp(Math.ceil(ctx.areaM2 / 2.5), 4, 24),
+      },
+      {
+        ids: ['piso-009'],
+        role: 'complemento',
+        qty: (ctx) => clamp(Math.ceil(ctx.areaM2 / 15), 1, 6),
+      },
+      { ids: ['piso-008'], role: 'herramienta', qty: () => randomInt(1, 3) },
+      { ids: ['her-002'], role: 'herramienta', qty: () => 1 },
+      {
+        ids: ['con-001'],
+        role: 'complemento',
+        qty: (ctx) => clamp(Math.ceil(ctx.areaM2 / 20), 1, 6),
+      },
+      { ids: ['mo-014', 'fle-001'], role: 'servicio', qty: () => 1 },
+      { ids: ['esc-001'], role: 'servicio', qty: () => 1 },
+      { ids: ['mo-002'], role: 'mano_obra', qty: (ctx) => ctx.areaM2, soft: true },
+      { ids: ['mo-007'], role: 'servicio_flex', qty: () => 1, soft: true },
+      { ids: ['mo-009'], role: 'servicio_flex', qty: () => 1, soft: true },
+      { ids: ['mo-011'], role: 'servicio_flex', qty: () => 1, soft: true },
+    ],
+  };
+}
+
+function sistemaGeneral(): Sistema {
+  return {
+    nombre: 'remodelacion_general',
+    balancePoolIds: ['mo-007', 'mo-009', 'mo-014', 'mo-010', 'mo-008'],
+    lineas: [
+      { ids: ['con-001'], role: 'principal', qty: () => randomInt(6, 14) },
+      { ids: ['con-003'], role: 'complemento', qty: () => randomInt(1, 3) },
+      { ids: ['con-008'], role: 'principal', qty: () => randomInt(40, 100) },
+      { ids: ['con-010'], role: 'complemento', qty: () => randomInt(8, 20) },
+      { ids: ['pin-001', 'pin-002'], role: 'principal', qty: () => randomInt(2, 5) },
+      { ids: ['piso-001'], role: 'principal', qty: () => randomInt(6, 14) },
+      { ids: ['piso-006'], role: 'complemento', qty: () => randomInt(3, 8) },
+      { ids: ['ele-001', 'ele-002'], role: 'complemento', qty: () => 1 },
+      { ids: ['ele-004'], role: 'complemento', qty: () => randomInt(6, 12) },
+      { ids: ['ele-005'], role: 'complemento', qty: () => randomInt(4, 8) },
+      { ids: ['plo-001'], role: 'complemento', qty: () => randomInt(2, 5) },
+      { ids: ['plo-006'], role: 'herramienta', qty: () => randomInt(2, 4) },
+      { ids: ['mo-014', 'fle-001'], role: 'servicio', qty: () => 1 },
+      { ids: ['esc-002', 'esc-001'], role: 'servicio', qty: () => 1 },
+      { ids: ['mo-001'], role: 'mano_obra', qty: () => randomInt(5, 12), soft: true },
+      { ids: ['mo-005'], role: 'mano_obra', qty: () => 1, soft: true },
+      { ids: ['mo-004'], role: 'mano_obra', qty: () => 1, soft: true },
+      { ids: ['mo-007'], role: 'servicio_flex', qty: () => 1, soft: true },
+      { ids: ['mo-009'], role: 'servicio_flex', qty: () => 1, soft: true },
+    ],
+  };
+}
+
+function sistemaElectrico(): Sistema {
+  return {
+    nombre: 'electrico',
+    balancePoolIds: ['mo-007', 'mo-005', 'mo-009', 'mo-014', 'mo-010'],
+    lineas: [
+      { ids: ['ele-002', 'ele-001'], role: 'principal', qty: () => randomInt(1, 3) },
+      { ids: ['ele-004'], role: 'principal', qty: () => randomInt(8, 16) },
+      { ids: ['ele-005', 'ele-006'], role: 'principal', qty: () => randomInt(6, 12) },
+      { ids: ['ele-007', 'ele-008'], role: 'principal', qty: () => 1 },
+      { ids: ['ele-009'], role: 'complemento', qty: () => randomInt(4, 10) },
+      { ids: ['ele-010'], role: 'complemento', qty: () => randomInt(6, 16) },
+      { ids: ['ele-011'], role: 'complemento', qty: () => randomInt(8, 20) },
+      { ids: ['ele-012'], role: 'complemento', qty: () => randomInt(4, 10) },
+      { ids: ['her-004'], role: 'herramienta', qty: () => 1 },
+      { ids: ['mo-014', 'fle-001'], role: 'servicio', qty: () => 1 },
+      { ids: ['mo-005'], role: 'mano_obra', qty: () => 1, soft: true },
+      { ids: ['mo-007'], role: 'servicio_flex', qty: () => 1, soft: true },
+      { ids: ['mo-009'], role: 'servicio_flex', qty: () => 1, soft: true },
+    ],
+  };
+}
+
+function sistemaPlomeria(): Sistema {
+  return {
+    nombre: 'plomeria',
+    balancePoolIds: ['mo-007', 'mo-004', 'mo-009', 'mo-014', 'mo-010'],
+    lineas: [
+      { ids: ['plo-001', 'plo-002'], role: 'principal', qty: () => randomInt(3, 8) },
+      { ids: ['plo-003'], role: 'principal', qty: () => randomInt(2, 5) },
+      { ids: ['plo-005'], role: 'complemento', qty: () => randomInt(6, 16) },
+      { ids: ['plo-005'], role: 'complemento', qty: () => randomInt(4, 10) },
+      { ids: ['plo-006'], role: 'principal', qty: () => randomInt(2, 6) },
+      { ids: ['plo-007'], role: 'complemento', qty: () => randomInt(1, 3) },
+      { ids: ['ban-005', 'ban-006'], role: 'principal', qty: () => 1 },
+      { ids: ['plo-010'], role: 'herramienta', qty: () => randomInt(1, 2) },
+      { ids: ['plo-010'], role: 'herramienta', qty: () => randomInt(2, 5) },
+      { ids: ['her-003'], role: 'herramienta', qty: () => 1 },
+      { ids: ['mo-014', 'fle-001'], role: 'servicio', qty: () => 1 },
+      { ids: ['mo-004'], role: 'mano_obra', qty: () => 1, soft: true },
+      { ids: ['mo-007'], role: 'servicio_flex', qty: () => 1, soft: true },
+      { ids: ['mo-009'], role: 'servicio_flex', qty: () => 1, soft: true },
+    ],
+  };
+}
+
+function sistemaPintura(): Sistema {
+  return {
+    nombre: 'pintura',
+    balancePoolIds: ['mo-007', 'mo-011', 'mo-015', 'mo-009', 'mo-014'],
+    lineas: [
+      {
+        ids: ['pin-001', 'pin-002'],
+        role: 'principal',
+        qty: (ctx) => clamp(Math.ceil(ctx.areaM2 / 28), 2, 8),
+      },
+      { ids: ['pin-005', 'pin-006'], role: 'complemento', qty: () => randomInt(1, 3) },
+      { ids: ['con-020'], role: 'complemento', qty: () => randomInt(2, 6) },
+      { ids: ['pin-008'], role: 'herramienta', qty: () => randomInt(3, 8) },
+      { ids: ['pin-009'], role: 'herramienta', qty: () => randomInt(2, 5) },
+      { ids: ['pin-011'], role: 'herramienta', qty: () => randomInt(2, 4) },
+      { ids: ['mo-014', 'fle-001'], role: 'servicio', qty: () => 1 },
+      { ids: ['mo-003'], role: 'mano_obra', qty: (ctx) => ctx.areaM2, soft: true },
+      { ids: ['mo-011'], role: 'servicio_flex', qty: () => 1, soft: true },
+      { ids: ['mo-007'], role: 'servicio_flex', qty: () => 1, soft: true },
+      { ids: ['mo-009'], role: 'servicio_flex', qty: () => 1, soft: true },
+    ],
+  };
+}
+
+function elegirSistema(tipo: TipoRemodelacion): Sistema {
+  switch (tipo) {
+    case 'Techo / impermeabilización':
+      return pickOne(sistemasTecho());
+    case 'Baño':
+      return sistemaBano();
+    case 'Cocina':
+      return sistemaCocina();
+    case 'Piso / azulejo':
+      return sistemaPiso();
+    case 'Eléctrico':
+      return sistemaElectrico();
+    case 'Plomería':
+      return sistemaPlomeria();
+    case 'Pintura':
+      return sistemaPintura();
+    case 'Remodelación general':
+    case 'Ampliación ligera':
+      return sistemaGeneral();
+    case 'Sala':
+    case 'Recámara':
+      return {
+        nombre: 'acabados_interior',
+        balancePoolIds: ['mo-007', 'mo-009', 'mo-011', 'mo-014'],
+        lineas: [
+          {
+            ids: ['pin-001'],
+            role: 'principal',
+            qty: (ctx) => clamp(Math.ceil(ctx.areaM2 / 25), 2, 6),
+          },
+          {
+            ids: ['piso-016', 'piso-001'],
+            role: 'principal',
+            qty: (ctx) => clamp(Math.ceil(ctx.areaM2 / 1.4), 8, 40),
+          },
+          {
+            ids: ['sal-001', 'piso-010'],
+            role: 'complemento',
+            qty: (ctx) => clamp(Math.ceil(ctx.areaM2 / 2.4), 4, 20),
+          },
+          { ids: ['con-015', 'con-014'], role: 'complemento', qty: () => randomInt(2, 5) },
+          { ids: ['ele-012'], role: 'complemento', qty: () => randomInt(2, 6) },
+          { ids: ['ele-004'], role: 'complemento', qty: () => randomInt(4, 10) },
+          {
+            ids: ['sal-004'],
+            role: 'complemento',
+            qty: (ctx) => clamp(Math.round(ctx.areaM2 * 0.4), 4, 30),
+          },
+          { ids: ['mo-014', 'fle-001'], role: 'servicio', qty: () => 1 },
+          { ids: ['mo-003'], role: 'mano_obra', qty: (ctx) => ctx.areaM2, soft: true },
+          { ids: ['mo-007'], role: 'servicio_flex', qty: () => 1, soft: true },
+          { ids: ['mo-009'], role: 'servicio_flex', qty: () => 1, soft: true },
+        ],
+      };
+    case 'Fachada':
+      return {
+        nombre: 'fachada',
+        balancePoolIds: ['mo-007', 'mo-011', 'mo-015', 'mo-009', 'mo-014'],
+        lineas: [
+          {
+            ids: ['ext-001', 'pin-003'],
+            role: 'principal',
+            qty: (ctx) => clamp(Math.ceil(ctx.areaM2 / 25), 2, 8),
+          },
+          { ids: ['pin-005'], role: 'complemento', qty: () => randomInt(1, 3) },
+          { ids: ['con-020'], role: 'complemento', qty: () => randomInt(2, 8) },
+          { ids: ['ext-009'], role: 'complemento', qty: () => randomInt(1, 3) },
+          { ids: ['ext-008'], role: 'herramienta', qty: () => randomInt(2, 7) },
+          { ids: ['mo-014', 'fle-001'], role: 'servicio', qty: () => 1 },
+          { ids: ['mo-003'], role: 'mano_obra', qty: (ctx) => ctx.areaM2, soft: true },
+          { ids: ['mo-011'], role: 'servicio_flex', qty: () => 1, soft: true },
+          { ids: ['mo-007'], role: 'servicio_flex', qty: () => 1, soft: true },
+        ],
+      };
+    case 'Patio / exterior':
+      return {
+        nombre: 'patio',
+        balancePoolIds: ['mo-007', 'mo-009', 'mo-014', 'mo-010'],
+        lineas: [
+          {
+            ids: ['piso-012', 'piso-013'],
+            role: 'principal',
+            qty: (ctx) => clamp(ctx.areaM2, 10, 80),
+          },
+          { ids: ['con-001'], role: 'complemento', qty: () => randomInt(4, 10) },
+          { ids: ['con-003'], role: 'complemento', qty: () => randomInt(1, 3) },
+          { ids: ['con-004'], role: 'complemento', qty: () => randomInt(1, 2) },
+          { ids: ['ext-001'], role: 'complemento', qty: () => randomInt(1, 3) },
+          { ids: ['ext-004'], role: 'complemento', qty: () => randomInt(4, 12) },
+          { ids: ['ele-014', 'ext-003'], role: 'complemento', qty: () => randomInt(2, 4) },
+          { ids: ['mo-014', 'fle-001'], role: 'servicio', qty: () => 1 },
+          { ids: ['mo-001'], role: 'mano_obra', qty: () => randomInt(4, 10), soft: true },
+          { ids: ['mo-007'], role: 'servicio_flex', qty: () => 1, soft: true },
+          { ids: ['mo-009'], role: 'servicio_flex', qty: () => 1, soft: true },
+        ],
+      };
+    default:
+      return sistemaGeneral();
+  }
+}
+
+function construirLineasDuras(
+  sistema: Sistema,
+  catalogo: CatalogoMaterial[],
+  ctx: QtyContext,
+): { hard: RemisionItem[]; softSlots: RemisionItem[] } {
+  const hard: RemisionItem[] = [];
+  const softSlots: RemisionItem[] = [];
+  const usedConceptKeys = new Set<string>();
+
+  let impermeabilizantes = 0;
+  let selladores = 0;
+  let primarios = 0;
+  let fletes = 0;
+  let retiros = 0;
+
+  for (const linea of sistema.lineas) {
+    const mat = firstAvailable(catalogo, linea.ids);
+    if (!mat) continue;
+
+    const qtyRaw = linea.qty(ctx);
+    if (qtyRaw <= 0) continue;
+
+    const nombre = (linea.concepto ?? mat.nombre).toLowerCase();
+    if (usedConceptKeys.has(mat.id)) continue;
+
+    if (/impermeabilizante/.test(nombre) && !/muro|loseta|malla/.test(nombre)) {
+      impermeabilizantes += 1;
+      if (impermeabilizantes > 2) continue;
+    }
+    if (/sellador/.test(nombre)) {
+      selladores += 1;
+      if (selladores > 1) continue;
+    }
+    if (/primario/.test(nombre)) {
+      primarios += 1;
+      if (primarios > 1) continue;
+    }
+    if (/flete|acarreo/.test(nombre)) {
+      fletes += 1;
+      if (fletes > 1) continue;
+    }
+    if (/retiro de escombro|retiro de impermeabilizante|limpieza y retiro/.test(nombre)) {
+      retiros += 1;
+      if (retiros > 1) continue;
+    }
+
+    usedConceptKeys.add(mat.id);
+    const qty =
+      mat.unidad === 'm²' || mat.unidad === 'm³' || mat.unidad === 'm'
+        ? Math.round(qtyRaw * 2) / 2
+        : Math.max(1, Math.round(qtyRaw));
+
+    const item = crearItemDesdeCatalogo(mat, qty, undefined, linea.concepto);
+
+    if (linea.soft || linea.role === 'servicio_flex' || linea.role === 'mano_obra') {
+      softSlots.push(item);
+    } else {
+      hard.push(item);
     }
   }
 
-  return selected;
+  return { hard, softSlots };
 }
 
-function encontrarIdxAjustable(items: RemisionItem[]): number {
-  let idx = items.findIndex((i) =>
-    AJUSTABLES.some((nombre) => i.concepto === nombre),
-  );
-  if (idx === -1) {
-    idx = items.findIndex((i) =>
-      /mano de obra especializada|servicio de instalaci|material complementario/i.test(
-        i.concepto,
-      ),
-    );
-  }
-  return idx;
-}
-
-function asegurarPartidaAjustable(
-  items: RemisionItem[],
+/**
+ * Distribuye remanente en varias partidas profesionales.
+ * Si remanente > 15% del total, nunca lo deja en una sola partida.
+ */
+function distribuirRemanente(
+  hard: RemisionItem[],
+  softSlots: RemisionItem[],
+  totalRemision: number,
   catalogo: CatalogoMaterial[],
+  balancePoolIds: string[],
 ): RemisionItem[] {
-  if (encontrarIdxAjustable(items) >= 0) return items;
+  const items = [...hard.map((i) => ({ ...i }))];
+  const soft = softSlots.map((i) => ({ ...i }));
 
-  const fallback =
-    catalogo.find((c) => c.nombre === 'Mano de obra especializada') ??
-    catalogo.find((c) => c.id === 'mo-007');
+  // Base soft: MO por m² al precio catálogo (sin inflar); servicios flex en mínimo realista
+  for (const s of soft) {
+    if (s.unidad === 'm²') {
+      items.push(s); // importe = qty * precio sugerido
+    } else {
+      const base = Math.max(s.precio_unitario, 800);
+      items.push(setImporte(s, base));
+    }
+  }
 
-  if (!fallback) return items;
-  return [...items, crearItem(fallback, 1)];
+  let suma = normalizeMoney(items.reduce((a, i) => a + i.importe, 0));
+  let remanente = normalizeMoney(totalRemision - suma);
+
+  if (Math.abs(remanente) < 0.01) {
+    return aplicarTopesServicio(items, totalRemision, catalogo, balancePoolIds);
+  }
+
+  // Asegurar pool de balance disponible en la lista
+  const poolIds = balancePoolIds.length > 0 ? balancePoolIds : BALANCE_POOL_DEFAULT;
+  const balanceItems: RemisionItem[] = [];
+
+  for (const id of poolIds) {
+    const existentes = items.filter((i) => {
+      const mat = byId(catalogo, id);
+      return mat && i.concepto === sanitizarConcepto(mat.nombre);
+    });
+    if (existentes.length > 0) {
+      balanceItems.push(...existentes);
+      continue;
+    }
+    const mat = byId(catalogo, id);
+    if (!mat) continue;
+    const nuevo = crearItemDesdeCatalogo(mat, 1, undefined, mat.nombre);
+    const seeded = setImporte(nuevo, Math.max(mat.precio_sugerido, 500));
+    items.push(seeded);
+    balanceItems.push(seeded);
+  }
+
+  // Recalcular remanente tras sembrar base
+  suma = normalizeMoney(items.reduce((a, i) => a + i.importe, 0));
+  remanente = normalizeMoney(totalRemision - suma);
+
+  if (remanente <= 0) {
+    return cuadrarCentavos(aplicarTopesServicio(items, totalRemision, catalogo, poolIds), totalRemision);
+  }
+
+  const umbralSplit = totalRemision * SPLIT_THRESHOLD_PCT;
+  const sinks = items.filter((i) =>
+    balanceItems.some((b) => b.concepto === i.concepto) ||
+      (esServicioCapado(i) && i.unidad === 'servicio'),
+  );
+
+  // Número de partidas a usar según tamaño del remanente
+  let nPartidas = sinks.length;
+  if (remanente > umbralSplit) {
+    nPartidas = Math.max(3, Math.min(sinks.length, Math.ceil(remanente / (totalRemision * 0.12))));
+  } else {
+    nPartidas = Math.min(sinks.length, Math.max(2, Math.ceil(remanente / (totalRemision * 0.1))));
+  }
+
+  const targets = sinks.slice(0, nPartidas);
+  if (targets.length === 0) {
+    const mat = byId(catalogo, 'mo-007') ?? catalogo[0];
+    const extra = setImporte(crearItemDesdeCatalogo(mat, 1), remanente);
+    items.push(extra);
+    return cuadrarCentavos(items, totalRemision);
+  }
+
+  // Pesos: MO especializada un poco más, resto pareja
+  const pesos = targets.map((t) => (esManoObraEspecializada(t.concepto) ? 1.4 : 1));
+  const pesoTotal = pesos.reduce((a, b) => a + b, 0);
+
+  for (let i = 0; i < targets.length; i++) {
+    const share = normalizeMoney((remanente * pesos[i]) / pesoTotal);
+    const idx = items.findIndex((x) => x.id === targets[i].id);
+    if (idx < 0) continue;
+    const tope = topeImporte(items[idx].concepto, totalRemision);
+    const nuevo = Math.min(tope, normalizeMoney(items[idx].importe + share));
+    items[idx] = setImporte(items[idx], nuevo);
+  }
+
+  // Si aún falta por topes, repartir en sinks con capacidad
+  let guard = 0;
+  while (guard < 8) {
+    guard += 1;
+    suma = normalizeMoney(items.reduce((a, i) => a + i.importe, 0));
+    remanente = normalizeMoney(totalRemision - suma);
+    if (Math.abs(remanente) < 0.01) break;
+
+    const conCapacidad = items.filter((i) => {
+      if (!esServicioCapado(i) && i.unidad !== 'servicio') return false;
+      return i.importe < topeImporte(i.concepto, totalRemision) - 0.01;
+    });
+
+    if (conCapacidad.length === 0) {
+      // Ampliar pool
+      for (const id of poolIds) {
+        const mat = byId(catalogo, id);
+        if (!mat) continue;
+        const ya = items.some((i) => i.concepto === sanitizarConcepto(mat.nombre));
+        if (ya) continue;
+        const tope = topeImporte(mat.nombre, totalRemision);
+        const monto = Math.min(tope, remanente);
+        if (monto < 1) continue;
+        items.push(setImporte(crearItemDesdeCatalogo(mat, 1), monto));
+        break;
+      }
+      continue;
+    }
+
+    const chunk = normalizeMoney(remanente / conCapacidad.length);
+    for (const c of conCapacidad) {
+      const idx = items.findIndex((x) => x.id === c.id);
+      if (idx < 0) continue;
+      const tope = topeImporte(items[idx].concepto, totalRemision);
+      const add = Math.min(chunk, tope - items[idx].importe);
+      items[idx] = setImporte(items[idx], items[idx].importe + Math.max(0, add));
+    }
+  }
+
+  return cuadrarCentavos(
+    aplicarTopesServicio(items, totalRemision, catalogo, poolIds),
+    totalRemision,
+  );
 }
 
-function ajustarUltimaPartida(
+function aplicarTopesServicio(
   items: RemisionItem[],
   totalRemision: number,
+  catalogo: CatalogoMaterial[],
+  poolIds: string[],
 ): RemisionItem[] {
   const result = items.map((i) => ({ ...i }));
-  const sumaActual = normalizeMoney(result.reduce((s, i) => s + i.importe, 0));
-  const diferencia = normalizeMoney(totalRemision - sumaActual);
+  let excedente = 0;
 
-  if (Math.abs(diferencia) < 0.01) return result;
+  for (let i = 0; i < result.length; i++) {
+    if (!esServicioCapado(result[i])) continue;
+    // MO impermeabilización por m²: permitir hasta 35%
+    const tope =
+      result[i].unidad === 'm²' && /impermeabilizaci/i.test(result[i].concepto)
+        ? normalizeMoney(totalRemision * MAX_MO_ESPECIALIZADA_PCT)
+        : topeImporte(result[i].concepto, totalRemision);
+    if (result[i].importe > tope + 0.01) {
+      excedente = normalizeMoney(excedente + (result[i].importe - tope));
+      result[i] = setImporte(result[i], tope);
+    }
+  }
 
-  let idx = encontrarIdxAjustable(result);
-  if (idx === -1) idx = result.length - 1;
+  if (excedente < 0.01) return result;
 
-  const item = result[idx];
-  const nuevoImporte = normalizeMoney(Math.max(0.01, item.importe + diferencia));
-  const cantidad = item.cantidad > 0 ? item.cantidad : 1;
-
-  result[idx] = {
-    ...item,
-    cantidad,
-    importe: nuevoImporte,
-    precio_unitario: normalizeMoney(nuevoImporte / cantidad),
-  };
-
-  // Segunda pasada: si redondeo de precio alteró la suma vía recompute,
-  // forzar importe exacto en la partida ajustable.
-  const sumaFinal = normalizeMoney(result.reduce((s, i) => s + i.importe, 0));
-  const resto = normalizeMoney(totalRemision - sumaFinal);
-  if (Math.abs(resto) >= 0.01) {
-    result[idx] = {
-      ...result[idx],
-      importe: normalizeMoney(result[idx].importe + resto),
-    };
+  // Redistribuir excedente a otros sinks con capacidad
+  for (const id of poolIds) {
+    if (excedente < 0.01) break;
+    const mat = byId(catalogo, id);
+    if (!mat) continue;
+    const nombre = sanitizarConcepto(mat.nombre);
+    let idx = result.findIndex((r) => r.concepto === nombre);
+    if (idx < 0) {
+      const nuevo = crearItemDesdeCatalogo(mat, 1);
+      result.push(nuevo);
+      idx = result.length - 1;
+    }
+    const tope = topeImporte(result[idx].concepto, totalRemision);
+    const espacio = normalizeMoney(tope - result[idx].importe);
+    if (espacio <= 0) continue;
+    const add = Math.min(espacio, excedente);
+    result[idx] = setImporte(result[idx], result[idx].importe + add);
+    excedente = normalizeMoney(excedente - add);
   }
 
   return result;
 }
 
+function cuadrarCentavos(items: RemisionItem[], totalRemision: number): RemisionItem[] {
+  const result = items.map((i) => ({ ...i })).filter((i) => i.importe >= 0.01);
+  const suma = normalizeMoney(result.reduce((s, i) => s + i.importe, 0));
+  const diff = normalizeMoney(totalRemision - suma);
+  if (Math.abs(diff) < 0.01) return result;
+
+  // Preferir sink pequeño con capacidad
+  let idx = result.findIndex(
+    (i) =>
+      /herramienta y consumibles|supervisi|flete y acarreo/i.test(i.concepto) &&
+      i.importe + diff <= topeImporte(i.concepto, totalRemision) + 0.01,
+  );
+  if (idx === -1) {
+    idx = result.findIndex(
+      (i) =>
+        esServicioCapado(i) &&
+        i.importe + diff <= topeImporte(i.concepto, totalRemision) + 0.01,
+    );
+  }
+  if (idx === -1) idx = result.length - 1;
+
+  result[idx] = setImporte(result[idx], result[idx].importe + diff);
+  return result.map((i) => ({
+    ...i,
+    concepto: sanitizarConcepto(i.concepto),
+  }));
+}
+
+function ordenarProfesional(items: RemisionItem[]): RemisionItem[] {
+  const roleGuess = (concepto: string): LineRole => {
+    const n = concepto.toLowerCase();
+    if (/mano de obra especializada|aplicaci[oó]n de sistema|refuerzo en puntos|herramienta y consumibles|supervisi/.test(n))
+      return 'servicio_flex';
+    if (/mano de obra/.test(n)) return 'mano_obra';
+    if (/flete|acarreo|retiro|limpieza|andamio|preparaci/.test(n)) return 'servicio';
+    if (/rodillo|cepillo|brocha|espátula|crucetas|cinta|teflón|nivel/.test(n)) return 'herramienta';
+    if (/pegazulejo|boquilla|sellador|primario|malla|resanador|cemento|arena|conexiones|tubo|cable/.test(n))
+      return 'complemento';
+    return 'principal';
+  };
+
+  return [...items].sort(
+    (a, b) => ROLE_ORDER.indexOf(roleGuess(a.concepto)) - ROLE_ORDER.indexOf(roleGuess(b.concepto)),
+  );
+}
+
+function assertSinPalabrasProhibidas(items: RemisionItem[]): RemisionItem[] {
+  return items.map((i) => ({ ...i, concepto: sanitizarConcepto(i.concepto) }));
+}
+
 /**
- * Genera partidas coherentes para una remisión, cuadrando exactamente con totalRemision.
+ * Genera partidas coherentes y realistas, cuadrando exactamente con totalRemision.
  */
 export function generateRemisionItems(
   params: GenerateRemisionItemsParams,
 ): RemisionItem[] {
-  const { totalRemision, tipoRemodelacion, catalogo } = params;
-
+  const { totalRemision, tipoRemodelacion, catalogo, areaM2 } = params;
   if (totalRemision <= 0) return [];
 
-  const totalPartidas = getPartidasCount(totalRemision);
-  const pctMateriales = randomInRange(0.6, 0.75);
-  const pctManoObra = randomInRange(0.15, 0.3);
+  const area = estimateAreaM2(tipoRemodelacion, totalRemision, areaM2);
+  const sistema = elegirSistema(tipoRemodelacion);
+  const ctx: QtyContext = { areaM2: area, totalRemision };
 
-  const presupuestoMateriales = normalizeMoney(totalRemision * pctMateriales);
-  const presupuestoManoObra = normalizeMoney(totalRemision * pctManoObra);
-  const presupuestoServicios = normalizeMoney(
-    totalRemision - presupuestoMateriales - presupuestoManoObra,
-  );
-
-  const { materiales, servicios, manoObra } = filterCatalogo(
+  const { hard, softSlots } = construirLineasDuras(sistema, catalogo, ctx);
+  let items = distribuirRemanente(
+    hard,
+    softSlots,
+    totalRemision,
     catalogo,
-    tipoRemodelacion,
+    sistema.balancePoolIds ?? BALANCE_POOL_DEFAULT,
   );
+  items = ordenarProfesional(items);
+  items = assertSinPalabrasProhibidas(items);
 
-  // Sin fallback al catálogo completo: evita contaminar tipologías.
-  if (materiales.length === 0 && manoObra.length === 0 && servicios.length === 0) {
-    const fallback =
-      catalogo.find((c) => c.nombre === 'Mano de obra especializada') ?? catalogo[0];
-    return ajustarUltimaPartida([crearItem(fallback, 1)], totalRemision);
+  // Garantizar cuadre exacto final
+  const suma = normalizeMoney(items.reduce((s, i) => s + i.importe, 0));
+  if (Math.abs(suma - totalRemision) >= 0.01) {
+    items = cuadrarCentavos(items, totalRemision);
   }
 
-  const numMateriales = Math.min(
-    materiales.length,
-    Math.max(materiales.length > 0 ? 1 : 0, Math.round(totalPartidas * pctMateriales)),
-  );
-  const numManoObra = Math.min(
-    manoObra.length,
-    Math.max(manoObra.length > 0 ? 1 : 0, Math.round(totalPartidas * pctManoObra)),
-  );
-  const numServicios = Math.min(
-    servicios.length,
-    Math.max(0, totalPartidas - numMateriales - numManoObra),
-  );
-
-  const matsSeleccionados = seleccionarProductos(
-    materiales,
-    numMateriales,
-    tipoRemodelacion,
-  );
-  const moSeleccionados = seleccionarProductos(
-    manoObra,
-    numManoObra,
-    tipoRemodelacion,
-  );
-  const srvSeleccionados = seleccionarProductos(
-    servicios,
-    numServicios,
-    tipoRemodelacion,
-  );
-
-  const itemsMateriales: RemisionItem[] = [];
-  const importePorMaterial =
-    matsSeleccionados.length > 0
-      ? presupuestoMateriales / matsSeleccionados.length
-      : 0;
-
-  for (const mat of matsSeleccionados) {
-    const maxImporte = totalRemision * 0.35;
-    const objetivo = Math.min(importePorMaterial, maxImporte);
-    const cantidad = calcularCantidadRealista(mat, objetivo);
-    itemsMateriales.push(crearItem(mat, cantidad));
-  }
-
-  const itemsServicios: RemisionItem[] = [];
-  const importePorServicio =
-    srvSeleccionados.length > 0
-      ? presupuestoServicios / srvSeleccionados.length
-      : 0;
-
-  for (const srv of srvSeleccionados) {
-    const cantidad = calcularCantidadRealista(srv, importePorServicio);
-    itemsServicios.push(crearItem(srv, cantidad));
-  }
-
-  const itemsManoObra: RemisionItem[] = [];
-  const importePorMO =
-    moSeleccionados.length > 0
-      ? presupuestoManoObra / moSeleccionados.length
-      : 0;
-
-  for (const mo of moSeleccionados) {
-    const cantidad = calcularCantidadRealista(mo, importePorMO);
-    itemsManoObra.push(crearItem(mo, cantidad));
-  }
-
-  let todos = [...itemsMateriales, ...itemsServicios, ...itemsManoObra];
-
-  if (todos.length === 0) {
-    const fallback =
-      catalogo.find((c) => c.nombre === 'Mano de obra especializada') ?? catalogo[0];
-    return ajustarUltimaPartida([crearItem(fallback, 1)], totalRemision);
-  }
-
-  todos = asegurarPartidaAjustable(todos, catalogo);
-  return ajustarUltimaPartida(todos, totalRemision);
+  return items;
 }
 
-/** Recalcula importe de un item cuando cambia cantidad o precio */
 export function recalcularItemImporte(
   item: RemisionItem,
   cantidad?: number,
@@ -452,7 +1080,6 @@ export function recalcularItemImporte(
   };
 }
 
-/** Suma total de importes de partidas */
 export function sumItemsImporte(items: RemisionItem[]): number {
   return normalizeMoney(items.reduce((s, i) => s + i.importe, 0));
 }

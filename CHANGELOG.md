@@ -1,6 +1,41 @@
 # Changelog
 
+## [0.2.1] — 2026-07-14
+
+### Cambiado
+- Layout PDF: márgenes, tipografía, filas, bordes, columnas, REMISION/FECHA, totales y firma más compactos tipo hoja preimpresa (solo `generateRemisionPDF.ts`)
+
+## [0.2.0] — 2026-07-14
+
+### Añadido
+- PDF tipo hoja preimpresa: encabezados verdes, bordes negros, REMISION/FECHA, RFC, dirección empresa, cliente + PLAZO, columna CODIGOS DEL SAT DE PRODUCTO, mín. 10 renglones, cantidad con letra, SUBTOTAL/IVA/TOTAL, autorización, firma y nota legal
+- Catálogo ampliado a 182 conceptos con `sat_code`, fuentes, `confidence` y `last_verified_at`
+- `satCodes.ts` y documentación `fuentesPrecios.md`
+- Columna Código SAT editable en tabla de conceptos
+- Validación PDF: fecha, SAT obligatorio, cantidad/precio > 0, cuadre IVA
+
+### Cambiado
+- Generador incluye códigos SAT por partida; tipologías coherentes (baño/techo/cocina/piso)
+- Configuración de empresa (`companyInfo.addressLine`) con default Monterrey
+
+## [0.1.4] — 2026-07-14
+
+### Corregido
+- Remanente repartido en varias partidas profesionales (sin palabras “ajuste/diferencia/cuadre”)
+- Tope 25% por servicio (35% MO especializada justificada)
+- Conceptos PDF/UI profesionales para techo (aplicación, refuerzo con malla, preparación, etc.)
+
+## [0.1.3] — 2026-07-14
+
+
+### Corregido
+- Autopoblado profesional: sistemas coherentes (techo acrílico/prefabricado/cementoso/asfáltico)
+- Cantidades realistas acotadas; presupuesto alto va a MO/ajustes, no a cubetas absurdas
+- Distribución desigual de importes + orden profesional de partidas
+- Campo opcional área m² (estimación interna si se omite)
+
 ## [0.1.2] — 2026-07-14
+
 
 ### Corregido
 - Deploy Vercel: proyecto es Vite (no Next.js); se agrega `vercel.json` con framework vite y rewrite SPA

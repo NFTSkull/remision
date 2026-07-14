@@ -1,5 +1,6 @@
 import type { RemisionFormData, RemisionItem } from '../types';
 import { normalizeMoney } from './normalizeMoney';
+import { calculateRemisionTotals } from './calculateRemisionTotals';
 
 export interface ValidationResult {
   valid: boolean;
@@ -13,6 +14,7 @@ export function validateRemisionForPdf(
 ): ValidationResult {
   const errors: string[] = [];
 
+  if (!form.fecha?.trim()) errors.push('La fecha es obligatoria.');
   if (!form.nombre_cliente.trim()) errors.push('El nombre del cliente es obligatorio.');
   if (!form.rfc.trim()) errors.push('El RFC es obligatorio.');
   if (!form.direccion.trim()) errors.push('La dirección es obligatoria.');
@@ -29,12 +31,36 @@ export function validateRemisionForPdf(
     errors.push('Debe tener al menos un concepto en la tabla.');
   }
 
+  for (const [idx, item] of items.entries()) {
+    const n = idx + 1;
+    if (!item.concepto.trim()) {
+      errors.push(`El concepto del renglón ${n} es obligatorio.`);
+    }
+    if (!item.sat_code?.trim()) {
+      errors.push(`El código SAT del renglón ${n} es obligatorio.`);
+    }
+    if (!(item.cantidad > 0)) {
+      errors.push(`La cantidad del renglón ${n} debe ser mayor a cero.`);
+    }
+    if (!(item.precio_unitario > 0)) {
+      errors.push(`El precio unitario del renglón ${n} debe ser mayor a cero.`);
+    }
+  }
+
   if (totalRemision !== undefined && items.length > 0) {
     const suma = normalizeMoney(items.reduce((s, i) => s + i.importe, 0));
     if (Math.abs(suma - totalRemision) >= 0.01) {
       errors.push(
         'La suma de conceptos debe cuadrar exactamente con el total de remisión.',
       );
+    }
+
+    const totals = calculateRemisionTotals(form.monto_aprobado, form.iva_mode);
+    if (Math.abs(normalizeMoney(totals.subtotal + totals.iva) - totals.total) >= 0.01) {
+      errors.push('Subtotal + IVA debe ser igual al total.');
+    }
+    if (form.iva_mode === 'incluido' && Math.abs(totals.total - totals.total_remision) >= 0.01) {
+      errors.push('Con IVA incluido, el total debe igualar el total de remisión.');
     }
   }
 

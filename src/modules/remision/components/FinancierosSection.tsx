@@ -34,6 +34,20 @@ export function FinancierosSection({ form, totals, onChange }: Props) {
             placeholder="Ej: 15 días hábiles"
           />
         </label>
+        <label>
+          Área estimada m² (opcional)
+          <input
+            type="number"
+            min="0"
+            step="0.1"
+            value={form.area_m2 ?? ''}
+            onChange={(e) => {
+              const v = e.target.value;
+              onChange('area_m2', v === '' ? null : parseFloat(v) || null);
+            }}
+            placeholder="Si se omite, se estima internamente"
+          />
+        </label>
         <div className="calculated-field">
           <span className="label">Incremento 20%</span>
           <span className="value">{formatCurrencyMXN(totals.incremento_monto)}</span>
@@ -64,6 +78,9 @@ export function FinancierosSection({ form, totals, onChange }: Props) {
       </div>
       <p className="formula-note">
         Fórmula: Total remisión = Monto aprobado × 1.20
+      </p>
+      <p className="formula-note">
+        Precios referenciales con fuente; pueden variar por tienda y fecha.
       </p>
     </section>
   );

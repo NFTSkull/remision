@@ -1,5 +1,8 @@
 export type IvaMode = 'incluido' | 'sin_iva';
 
+export type PrecioConfidence = 'fuente_directa' | 'estimado' | 'manual';
+export type SatConfidence = 'exacto' | 'generico' | 'pendiente_verificar';
+
 export type TipoRemodelacion =
   | 'Remodelación general'
   | 'Baño'
@@ -27,8 +30,15 @@ export interface CatalogoMaterial {
   precio_sugerido: number;
   fuente_nombre: string;
   fuente_url: string;
+  fecha_precio: string;
   ultima_actualizacion: string;
+  last_verified_at: string;
+  sat_code: string;
+  sat_description: string;
+  sat_confidence: SatConfidence;
+  confidence: PrecioConfidence;
   tags: string[];
+  activo: boolean;
 }
 
 export interface RemisionItem {
@@ -38,6 +48,8 @@ export interface RemisionItem {
   concepto: string;
   precio_unitario: number;
   importe: number;
+  sat_code: string;
+  sat_description?: string;
   fuente_nombre?: string | null;
   fuente_url?: string | null;
 }
@@ -53,6 +65,7 @@ export interface RemisionFormData {
   plazo: string;
   tipo_remodelacion: TipoRemodelacion | '';
   iva_mode: IvaMode;
+  area_m2?: number | null;
 }
 
 export interface RemisionTotals {
@@ -62,6 +75,13 @@ export interface RemisionTotals {
   subtotal: number;
   iva: number;
   total: number;
+}
+
+export interface CompanyInfo {
+  rfc: string;
+  addressLine: string;
+  telefono: string;
+  nombre?: string;
 }
 
 export interface Remision {
@@ -80,6 +100,7 @@ export interface Remision {
   plazo: string;
   tipo_remodelacion: TipoRemodelacion;
   iva_mode: IvaMode;
+  area_m2?: number | null;
   subtotal: number;
   iva: number;
   total: number;
@@ -95,4 +116,12 @@ export interface GenerateRemisionItemsParams {
   plazo: string;
   ivaMode: IvaMode;
   catalogo: CatalogoMaterial[];
+  areaM2?: number | null;
+}
+
+export interface SatCodeEntry {
+  code: string;
+  description: string;
+  category: string;
+  appliesToTags: string[];
 }
