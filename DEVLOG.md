@@ -1,5 +1,13 @@
 # Devlog
 
+## 2026-07-14 — PDF: RFC vacío + paginación dinámica
+
+### Problema
+RFC empresa vacío arriba a la izquierda; salto de página fijo a 10 filas dejaba media hoja vacía.
+
+### Decisión
+Quitar bloque RFC superior. Calcular `maxRowsLast` / `maxRowsContinue` según altura real (header + footer). Si cabe con totales, una sola página.
+
 ## 2026-07-14 — Ajuste layout PDF
 
 ### Decisión

@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.2.2] — 2026-07-14
+
+### Corregido
+- PDF: elimina RFC superior vacío (solo RFC del cliente)
+- PDF: paginación dinámica por espacio disponible (ya no corta a 10 filas fijas)
+
 ## [0.2.1] — 2026-07-14
 
 ### Cambiado

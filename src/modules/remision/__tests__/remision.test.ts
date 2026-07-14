@@ -12,6 +12,10 @@ import {
   validateForGenerateConcepts,
   validateRemisionForPdf,
 } from '../lib/validation';
+import {
+  maxTableRowsForPage,
+  paginateRemisionItems,
+} from '../pdf/generateRemisionPDF';
 import type { RemisionFormData, RemisionItem, TipoRemodelacion } from '../types';
 
 function generar(
@@ -178,5 +182,45 @@ describe('numberToSpanishCurrency', () => {
     const letra = numberToSpanishCurrency(120_000);
     expect(letra).toContain('PESOS');
     expect(letra).toMatch(/CIENTO VEINTE MIL/);
+  });
+});
+
+describe('paginación PDF', () => {
+  const fakeItem = (n: number): RemisionItem => ({
+    id: String(n),
+    cantidad: 1,
+    unidad: 'pza',
+    concepto: `Concepto ${n}`,
+    precio_unitario: 100,
+    importe: 100,
+    sat_code: '30111601',
+  });
+
+  it('no corta a 10 si caben más en una página con footer', () => {
+    const pageH = 279.4;
+    const maxLast = maxTableRowsForPage(pageH, true);
+    expect(maxLast).toBeGreaterThan(10);
+    const items = Array.from({ length: Math.min(15, maxLast) }, (_, i) =>
+      fakeItem(i),
+    );
+    const pages = paginateRemisionItems(
+      items,
+      maxTableRowsForPage(pageH, false),
+      maxLast,
+    );
+    expect(pages).toHaveLength(1);
+    expect(pages[0]).toHaveLength(items.length);
+  });
+
+  it('llena página intermedia y deja resto en la última', () => {
+    const pageH = 279.4;
+    const maxLast = maxTableRowsForPage(pageH, true);
+    const maxCont = maxTableRowsForPage(pageH, false);
+    const total = maxLast + 5;
+    const items = Array.from({ length: total }, (_, i) => fakeItem(i));
+    const pages = paginateRemisionItems(items, maxCont, maxLast);
+    expect(pages.length).toBeGreaterThanOrEqual(2);
+    expect(pages[0].length).toBeGreaterThan(10);
+    expect(pages.flat()).toHaveLength(total);
   });
 });
