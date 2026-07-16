@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.2.4] — 2026-07-16
+
+### Cambiado
+- Nombre de descarga del PDF único: `REM-XXXXXX-cliente-dd-mm-yyyy.pdf` (temporal con hora si no hay folio)
+
 ## [0.2.3] — 2026-07-16
 
 ### Cambiado

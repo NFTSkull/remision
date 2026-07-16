@@ -1,5 +1,13 @@
 # Devlog
 
+## 2026-07-16 — Nombre único de PDF
+
+### Problema
+`doc.save(`${folio}.pdf`)` hacía que todas las descargas se llamaran igual (p. ej. `REM-000001.pdf`), confuso al comparar archivos.
+
+### Decisión
+Helpers `sanitizeFilenamePart` + `buildRemisionPdfFilename`: folio + cliente + fecha; sin folio → `REM-temp-...-HHMMSS.pdf`.
+
 ## 2026-07-16 — Ferretería ficticia + % incremento editable
 
 ### Problema

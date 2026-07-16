@@ -23,6 +23,10 @@ import {
   maxTableRowsForPage,
   paginateRemisionItems,
 } from '../pdf/generateRemisionPDF';
+import {
+  buildRemisionPdfFilename,
+  sanitizeFilenamePart,
+} from '../lib/buildRemisionPdfFilename';
 import type { Remision, RemisionFormData, RemisionItem, TipoRemodelacion } from '../types';
 
 function generar(
@@ -308,6 +312,54 @@ describe('PDF contenido', () => {
     expect(ensureFerreteriaName(remision.ferreteria_nombre)).toBe(
       'MATERIALES DEL NORTE',
     );
+  });
+});
+
+describe('nombre de archivo PDF', () => {
+  it('sanitizeFilenamePart quita acentos y caracteres inválidos', () => {
+    expect(sanitizeFilenamePart('Greco Villanueva')).toBe('greco-villanueva');
+    expect(sanitizeFilenamePart('José María Núñez')).toBe('jose-maria-nunez');
+    expect(sanitizeFilenamePart('A/B\\C:D*E?F"G<H>I|J')).toBe('a-b-c-d-e-f-g-h-i-j');
+    expect(sanitizeFilenamePart('   ')).toBe('');
+  });
+
+  it('buildRemisionPdfFilename con folio y cliente', () => {
+    const name = buildRemisionPdfFilename({
+      folio: 'REM-000001',
+      nombre_cliente: 'Greco Villanueva',
+      fecha: '2026-07-16',
+    });
+    expect(name).toBe('REM-000001-greco-villanueva-16-07-2026.pdf');
+  });
+
+  it('buildRemisionPdfFilename sin cliente usa remision', () => {
+    const name = buildRemisionPdfFilename({
+      folio: 'REM-000002',
+      nombre_cliente: '',
+      fecha: '2026-07-16',
+    });
+    expect(name).toBe('REM-000002-remision-16-07-2026.pdf');
+  });
+
+  it('buildRemisionPdfFilename sin folio usa REM-temp + hora', () => {
+    const name = buildRemisionPdfFilename({
+      folio: '',
+      nombre_cliente: 'Greco Villanueva',
+      fecha: '2026-07-16',
+    });
+    expect(name).toMatch(
+      /^REM-temp-greco-villanueva-16-07-2026-\d{6}\.pdf$/,
+    );
+  });
+
+  it('no permite caracteres raros en el filename final', () => {
+    const name = buildRemisionPdfFilename({
+      folio: 'REM-000003',
+      nombre_cliente: 'Cliente / Especial*:Nombre?',
+      fecha: '2026-07-16',
+    });
+    expect(name).toBe('REM-000003-cliente-especial-nombre-16-07-2026.pdf');
+    expect(name).not.toMatch(/[\\/:*?"<>|]/);
   });
 });
 

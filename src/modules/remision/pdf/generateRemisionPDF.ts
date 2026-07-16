@@ -9,6 +9,7 @@ import { ensureFerreteriaName } from '../data/ferreteriasFicticias';
 import { formatCurrencyMXN } from '../lib/formatCurrencyMXN';
 import { numberToSpanishCurrency } from '../lib/numberToSpanishCurrency';
 import { normalizeMoney } from '../lib/normalizeMoney';
+import { buildRemisionPdfFilename } from '../lib/buildRemisionPdfFilename';
 
 const VERDE: [number, number, number] = [46, 125, 50];
 const NEGRO: [number, number, number] = [0, 0, 0];
@@ -510,5 +511,6 @@ export function buildRemisionPdfDoc(remision: Remision): jsPDF {
 }
 
 export function generateRemisionPDF(remision: Remision): void {
-  buildRemisionPdfDoc(remision).save(`${remision.folio}.pdf`);
+  const filename = buildRemisionPdfFilename(remision);
+  buildRemisionPdfDoc(remision).save(filename);
 }
