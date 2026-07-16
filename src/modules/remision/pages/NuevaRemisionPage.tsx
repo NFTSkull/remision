@@ -101,6 +101,10 @@ export function NuevaRemisionPage({ initialRemision }: Props) {
 
       <section className="form-section acciones-section">
         <h2>7. Acciones</h2>
+        <p className="formula-note">
+          Antes de descargar, revisa el nombre del emisor en la sección 6 (arriba).
+          Ese texto es el que sale centrado en el PDF.
+        </p>
         <div className="actions-row">
           <button type="button" className="btn btn-primary" onClick={handleSaveClick}>
             Guardar remisión

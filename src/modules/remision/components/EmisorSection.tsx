@@ -11,11 +11,11 @@ interface Props {
 /** Nombre que aparece centrado arriba en el PDF (emisor). */
 export function EmisorSection({ form, onChange }: Props) {
   return (
-    <section className="form-section">
-      <h2>6. Nombre en el PDF (emisor)</h2>
+    <section className="form-section emisor-section">
+      <h2>6. Nombre en el PDF (emisor / ferretería)</h2>
       <p className="formula-note">
-        Este texto sale centrado arriba en la nota de remisión. Puede ser una
-        ferretería u otro nombre comercial.
+        Edita este campo antes de descargar. El texto sale centrado arriba en la
+        nota de remisión (puede ser ferretería u otro nombre comercial).
       </p>
       <div className="form-grid">
         <label className="span-2">
