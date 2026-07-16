@@ -37,6 +37,7 @@ const emptyForm = (): RemisionFormData => ({
   tipo_remodelacion: '',
   iva_mode: 'incluido',
   area_m2: null,
+  ferreteria_nombre: ensureFerreteriaName(null),
 });
 
 interface Identity {
@@ -71,6 +72,9 @@ export function useRemisionForm(initialRemision?: Remision | null) {
           tipo_remodelacion: initialRemision.tipo_remodelacion,
           iva_mode: initialRemision.iva_mode,
           area_m2: initialRemision.area_m2 ?? null,
+          ferreteria_nombre: ensureFerreteriaName(
+            initialRemision.ferreteria_nombre,
+          ),
         }
       : emptyForm(),
   );
@@ -87,11 +91,6 @@ export function useRemisionForm(initialRemision?: Remision | null) {
           created_at: initialRemision.created_at,
         }
       : null,
-  );
-
-  /** Ferretería ficticia: una sola asignación por remisión */
-  const ferreteriaRef = useRef<string>(
-    ensureFerreteriaName(initialRemision?.ferreteria_nombre),
   );
 
   const [editingId, setEditingId] = useState<string | null>(
@@ -197,7 +196,6 @@ export function useRemisionForm(initialRemision?: Remision | null) {
   const buildRemision = useCallback((): Remision => {
     const identity = ensureIdentity();
     const now = new Date().toISOString();
-    ferreteriaRef.current = ensureFerreteriaName(ferreteriaRef.current);
     return {
       id: identity.id,
       folio: identity.folio,
@@ -219,7 +217,7 @@ export function useRemisionForm(initialRemision?: Remision | null) {
       iva: totals.iva,
       total: totals.total,
       items,
-      ferreteria_nombre: ferreteriaRef.current,
+      ferreteria_nombre: form.ferreteria_nombre.trim(),
       created_at: identity.created_at,
       updated_at: now,
     };
@@ -242,7 +240,6 @@ export function useRemisionForm(initialRemision?: Remision | null) {
 
   const handleClear = useCallback(() => {
     identityRef.current = null;
-    ferreteriaRef.current = ensureFerreteriaName(null);
     setForm(emptyForm());
     setItems([]);
     setEditingId(null);

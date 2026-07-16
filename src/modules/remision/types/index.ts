@@ -68,6 +68,8 @@ export interface RemisionFormData {
   tipo_remodelacion: TipoRemodelacion | '';
   iva_mode: IvaMode;
   area_m2?: number | null;
+  /** Nombre del emisor en el PDF (editable). */
+  ferreteria_nombre: string;
 }
 
 export interface RemisionTotals {
@@ -107,7 +109,7 @@ export interface Remision {
   iva: number;
   total: number;
   items: RemisionItem[];
-  /** Nombre ficticio del emisor en PDF; se asigna una sola vez. */
+  /** Nombre del emisor en PDF (editable; se sugiere uno al crear). */
   ferreteria_nombre?: string;
   created_at: string;
   updated_at: string;

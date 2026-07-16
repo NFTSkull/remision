@@ -60,6 +60,9 @@ export function validateRemisionForPdf(
   errors.push(...pctValidation.errors);
 
   if (!form.plazo.trim()) errors.push('El plazo es obligatorio.');
+  if (!form.ferreteria_nombre?.trim()) {
+    errors.push('El nombre del emisor en el PDF es obligatorio.');
+  }
   if (!form.tipo_remodelacion) {
     errors.push('Debe seleccionar un tipo de remodelación.');
   }

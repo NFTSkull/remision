@@ -1,5 +1,13 @@
 # Devlog
 
+## 2026-07-16 — Nombre emisor editable en PDF
+
+### Problema
+`ferreteria_nombre` se asignaba solo una vez (ref) y no se podía cambiar en el formulario.
+
+### Decisión
+Campo en `RemisionFormData` + sección «6. Nombre en el PDF (emisor)» al final; validación obligatoria; el texto del formulario es el que sale centrado arriba en el PDF.
+
 ## 2026-07-16 — Nombre único de PDF
 
 ### Problema

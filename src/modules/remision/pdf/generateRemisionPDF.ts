@@ -236,7 +236,7 @@ function drawPageHeader(
 
   y += REM_TITLE_H + FECHA_H + GAP_AFTER_HEADER;
 
-  // Emisor: ferretería ficticia (sin dirección fija ni datos de empresas reales)
+  // Emisor: nombre editable del formulario (centrado arriba en el PDF)
   const ferreteria = ensureFerreteriaName(remision.ferreteria_nombre);
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(9);

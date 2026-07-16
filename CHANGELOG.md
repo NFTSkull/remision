@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.2.5] — 2026-07-16
+
+### Cambiado
+- Nombre del emisor en el PDF editable (sección al final del formulario); se sugiere uno al crear y se puede escribir cualquier ferretería u otro nombre
+
 ## [0.2.4] — 2026-07-16
 
 ### Cambiado

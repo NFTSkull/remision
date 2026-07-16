@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { PRECIOS_NOTA } from '../constants/tiposRemodelacion';
 import { ClienteSection } from '../components/ClienteSection';
 import { ConceptosTable } from '../components/ConceptosTable';
+import { EmisorSection } from '../components/EmisorSection';
 import { FinancierosSection } from '../components/FinancierosSection';
 import { TipoRemodelacionSection } from '../components/TipoRemodelacionSection';
 import { TotalesSection } from '../components/TotalesSection';
@@ -96,8 +97,10 @@ export function NuevaRemisionPage({ initialRemision }: Props) {
 
       <TotalesSection totals={totals} ivaMode={form.iva_mode} />
 
+      <EmisorSection form={form} onChange={updateField} />
+
       <section className="form-section acciones-section">
-        <h2>6. Acciones</h2>
+        <h2>7. Acciones</h2>
         <div className="actions-row">
           <button type="button" className="btn btn-primary" onClick={handleSaveClick}>
             Guardar remisión

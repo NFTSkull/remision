@@ -184,6 +184,7 @@ describe('validación', () => {
     plazo: '',
     tipo_remodelacion: 'Baño',
     iva_mode: 'incluido',
+    ferreteria_nombre: 'FERRETERÍA EL MARTILLO',
   };
 
   const itemOk: RemisionItem = {
@@ -200,6 +201,16 @@ describe('validación', () => {
     const r = validateRemisionForPdf(baseForm, [itemOk], 120_000);
     expect(r.valid).toBe(false);
     expect(r.errors.some((e) => e.includes('plazo'))).toBe(true);
+  });
+
+  it('no permite PDF sin nombre del emisor', () => {
+    const r = validateRemisionForPdf(
+      { ...baseForm, plazo: '10 días', ferreteria_nombre: '   ' },
+      [itemOk],
+      120_000,
+    );
+    expect(r.valid).toBe(false);
+    expect(r.errors.some((e) => e.includes('emisor'))).toBe(true);
   });
 
   it('no permite PDF sin código SAT', () => {

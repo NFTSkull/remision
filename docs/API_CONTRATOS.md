@@ -27,8 +27,9 @@ La nota de remisión no sustituye CFDI; los códigos SAT son referenciales para 
 
 ## Emisor PDF
 
-- Campo `ferreteria_nombre` (asignado una vez por remisión desde `FERRETERIAS_FICTICIAS`).
-- El PDF **no** muestra dirección fija tipo Mariano Escobedo ni RFC superior vacío.
+- Campo `ferreteria_nombre` editable en el formulario (§6 Nombre en el PDF).
+- Al crear remisión se sugiere un nombre de `FERRETERIAS_FICTICIAS`; el usuario puede cambiarlo a cualquier texto.
+- El PDF muestra ese nombre centrado arriba; **no** muestra dirección fija ni RFC superior vacío.
 - El PDF **no** muestra monto aprobado, porcentaje ni monto de incremento.
 
 ## Persistencia local
@@ -40,7 +41,7 @@ La nota de remisión no sustituye CFDI; los códigos SAT son referenciales para 
 
 ## Validaciones PDF / guardar
 
-Obligatorios: fecha, nombre, RFC, dirección, teléfono, ciudad, monto_aprobado > 0, porcentaje_incremento (0–100), plazo, tipo_remodelacion, ≥1 concepto.
+Obligatorios: fecha, nombre, RFC, dirección, teléfono, ciudad, monto_aprobado > 0, porcentaje_incremento (0–100), plazo, ferreteria_nombre, tipo_remodelacion, ≥1 concepto.
 
 Por partida: cantidad > 0, precio > 0, `sat_code` no vacío.
 
