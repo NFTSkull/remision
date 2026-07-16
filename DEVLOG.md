@@ -1,5 +1,15 @@
 # Devlog
 
+## 2026-07-16 — Ferretería ficticia + % incremento editable
+
+### Problema
+PDF mostraba dirección fija real; el incremento estaba hardcodeado al 20%.
+
+### Decisión
+- `ferreteria_nombre` aleatorio de lista ficticia, persistido una sola vez por remisión.
+- `porcentaje_incremento` editable (0–100, default 20); totales/generador/PDF usan el total calculado.
+- PDF no muestra monto aprobado ni %.
+
 ## 2026-07-14 — PDF: RFC vacío + paginación dinámica
 
 ### Problema

@@ -26,6 +26,29 @@ export function FinancierosSection({ form, totals, onChange }: Props) {
           />
         </label>
         <label>
+          Porcentaje de incremento *
+          <input
+            type="number"
+            min="0"
+            max="100"
+            step="0.1"
+            value={
+              Number.isFinite(form.porcentaje_incremento)
+                ? form.porcentaje_incremento
+                : ''
+            }
+            onChange={(e) => {
+              const v = e.target.value;
+              if (v === '') {
+                onChange('porcentaje_incremento', Number.NaN);
+                return;
+              }
+              onChange('porcentaje_incremento', parseFloat(v));
+            }}
+            placeholder="20"
+          />
+        </label>
+        <label>
           Plazo *
           <input
             type="text"
@@ -49,7 +72,9 @@ export function FinancierosSection({ form, totals, onChange }: Props) {
           />
         </label>
         <div className="calculated-field">
-          <span className="label">Incremento 20%</span>
+          <span className="label">
+            Incremento ({Number.isFinite(form.porcentaje_incremento) ? form.porcentaje_incremento : '—'}%)
+          </span>
           <span className="value">{formatCurrencyMXN(totals.incremento_monto)}</span>
         </div>
         <div className="calculated-field highlight">
@@ -77,7 +102,7 @@ export function FinancierosSection({ form, totals, onChange }: Props) {
         </label>
       </div>
       <p className="formula-note">
-        Fórmula: Total remisión = Monto aprobado × 1.20
+        Fórmula: Total remisión = Monto aprobado × (1 + porcentaje / 100)
       </p>
       <p className="formula-note">
         Precios referenciales con fuente; pueden variar por tienda y fecha.

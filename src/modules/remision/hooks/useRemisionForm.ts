@@ -1,7 +1,11 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import { CATALOGO_MATERIALES } from '../data/catalogoMateriales';
-import { calculateRemisionTotals } from '../lib/calculateRemisionTotals';
+import { ensureFerreteriaName } from '../data/ferreteriasFicticias';
+import {
+  calculateRemisionTotals,
+  DEFAULT_PORCENTAJE_INCREMENTO,
+} from '../lib/calculateRemisionTotals';
 import { createFolio } from '../lib/createFolio';
 import {
   generateRemisionItems,
@@ -28,6 +32,7 @@ const emptyForm = (): RemisionFormData => ({
   telefono: '',
   ciudad: '',
   monto_aprobado: 0,
+  porcentaje_incremento: DEFAULT_PORCENTAJE_INCREMENTO,
   plazo: '',
   tipo_remodelacion: '',
   iva_mode: 'incluido',
@@ -38,6 +43,16 @@ interface Identity {
   id: string;
   folio: string;
   created_at: string;
+}
+
+function resolvePorcentaje(remision: Remision): number {
+  if (
+    typeof remision.porcentaje_incremento === 'number' &&
+    Number.isFinite(remision.porcentaje_incremento)
+  ) {
+    return remision.porcentaje_incremento;
+  }
+  return DEFAULT_PORCENTAJE_INCREMENTO;
 }
 
 export function useRemisionForm(initialRemision?: Remision | null) {
@@ -51,6 +66,7 @@ export function useRemisionForm(initialRemision?: Remision | null) {
           telefono: initialRemision.telefono,
           ciudad: initialRemision.ciudad,
           monto_aprobado: initialRemision.monto_aprobado,
+          porcentaje_incremento: resolvePorcentaje(initialRemision),
           plazo: initialRemision.plazo,
           tipo_remodelacion: initialRemision.tipo_remodelacion,
           iva_mode: initialRemision.iva_mode,
@@ -73,6 +89,11 @@ export function useRemisionForm(initialRemision?: Remision | null) {
       : null,
   );
 
+  /** Ferretería ficticia: una sola asignación por remisión */
+  const ferreteriaRef = useRef<string>(
+    ensureFerreteriaName(initialRemision?.ferreteria_nombre),
+  );
+
   const [editingId, setEditingId] = useState<string | null>(
     () => initialRemision?.id ?? null,
   );
@@ -82,12 +103,13 @@ export function useRemisionForm(initialRemision?: Remision | null) {
   const [errors, setErrors] = useState<string[]>([]);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
-  const totals = useMemo(
-    () => calculateRemisionTotals(form.monto_aprobado, form.iva_mode),
-    [form.monto_aprobado, form.iva_mode],
-  );
+  const totals = useMemo(() => {
+    const pct = Number.isFinite(form.porcentaje_incremento)
+      ? form.porcentaje_incremento
+      : DEFAULT_PORCENTAJE_INCREMENTO;
+    return calculateRemisionTotals(form.monto_aprobado, form.iva_mode, pct);
+  }, [form.monto_aprobado, form.iva_mode, form.porcentaje_incremento]);
 
-  /** Asigna id/folio una sola vez para no quemar folios en PDF previo a guardar */
   const ensureIdentity = useCallback((): Identity => {
     if (!identityRef.current) {
       const created_at = new Date().toISOString();
@@ -175,6 +197,7 @@ export function useRemisionForm(initialRemision?: Remision | null) {
   const buildRemision = useCallback((): Remision => {
     const identity = ensureIdentity();
     const now = new Date().toISOString();
+    ferreteriaRef.current = ensureFerreteriaName(ferreteriaRef.current);
     return {
       id: identity.id,
       folio: identity.folio,
@@ -185,7 +208,7 @@ export function useRemisionForm(initialRemision?: Remision | null) {
       telefono: form.telefono.trim(),
       ciudad: form.ciudad.trim(),
       monto_aprobado: form.monto_aprobado,
-      incremento_porcentaje: totals.incremento_porcentaje,
+      porcentaje_incremento: totals.porcentaje_incremento,
       incremento_monto: totals.incremento_monto,
       total_remision: totals.total_remision,
       plazo: form.plazo.trim(),
@@ -196,6 +219,7 @@ export function useRemisionForm(initialRemision?: Remision | null) {
       iva: totals.iva,
       total: totals.total,
       items,
+      ferreteria_nombre: ferreteriaRef.current,
       created_at: identity.created_at,
       updated_at: now,
     };
@@ -218,6 +242,7 @@ export function useRemisionForm(initialRemision?: Remision | null) {
 
   const handleClear = useCallback(() => {
     identityRef.current = null;
+    ferreteriaRef.current = ensureFerreteriaName(null);
     setForm(emptyForm());
     setItems([]);
     setEditingId(null);

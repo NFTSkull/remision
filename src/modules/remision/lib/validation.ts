@@ -1,10 +1,42 @@
 import type { RemisionFormData, RemisionItem } from '../types';
+import {
+  calculateRemisionTotals,
+  DEFAULT_PORCENTAJE_INCREMENTO,
+  MAX_PORCENTAJE_INCREMENTO,
+} from './calculateRemisionTotals';
 import { normalizeMoney } from './normalizeMoney';
-import { calculateRemisionTotals } from './calculateRemisionTotals';
 
 export interface ValidationResult {
   valid: boolean;
   errors: string[];
+}
+
+/** Valida porcentaje: número finito, 0..MAX inclusive. */
+export function validatePorcentajeIncremento(
+  value: unknown,
+): ValidationResult {
+  const errors: string[] = [];
+
+  if (value === '' || value === null || value === undefined) {
+    errors.push('El porcentaje de incremento es obligatorio.');
+    return { valid: false, errors };
+  }
+
+  const n = typeof value === 'number' ? value : Number(value);
+  if (!Number.isFinite(n)) {
+    errors.push('El porcentaje de incremento debe ser un número válido.');
+    return { valid: false, errors };
+  }
+  if (n < 0) {
+    errors.push('El porcentaje de incremento no puede ser negativo.');
+  }
+  if (n > MAX_PORCENTAJE_INCREMENTO) {
+    errors.push(
+      `El porcentaje de incremento no puede ser mayor a ${MAX_PORCENTAJE_INCREMENTO}.`,
+    );
+  }
+
+  return { valid: errors.length === 0, errors };
 }
 
 export function validateRemisionForPdf(
@@ -23,6 +55,10 @@ export function validateRemisionForPdf(
   if (!form.monto_aprobado || form.monto_aprobado <= 0) {
     errors.push('El monto aprobado debe ser mayor a cero.');
   }
+
+  const pctValidation = validatePorcentajeIncremento(form.porcentaje_incremento);
+  errors.push(...pctValidation.errors);
+
   if (!form.plazo.trim()) errors.push('El plazo es obligatorio.');
   if (!form.tipo_remodelacion) {
     errors.push('Debe seleccionar un tipo de remodelación.');
@@ -47,7 +83,7 @@ export function validateRemisionForPdf(
     }
   }
 
-  if (totalRemision !== undefined && items.length > 0) {
+  if (totalRemision !== undefined && items.length > 0 && pctValidation.valid) {
     const suma = normalizeMoney(items.reduce((s, i) => s + i.importe, 0));
     if (Math.abs(suma - totalRemision) >= 0.01) {
       errors.push(
@@ -55,7 +91,11 @@ export function validateRemisionForPdf(
       );
     }
 
-    const totals = calculateRemisionTotals(form.monto_aprobado, form.iva_mode);
+    const totals = calculateRemisionTotals(
+      form.monto_aprobado,
+      form.iva_mode,
+      form.porcentaje_incremento,
+    );
     if (Math.abs(normalizeMoney(totals.subtotal + totals.iva) - totals.total) >= 0.01) {
       errors.push('Subtotal + IVA debe ser igual al total.');
     }
@@ -75,9 +115,13 @@ export function validateForGenerateConcepts(
   if (!form.monto_aprobado || form.monto_aprobado <= 0) {
     errors.push('Ingrese un monto aprobado mayor a cero para generar conceptos.');
   }
+  const pctValidation = validatePorcentajeIncremento(form.porcentaje_incremento);
+  errors.push(...pctValidation.errors);
   if (!form.tipo_remodelacion) {
     errors.push('Seleccione un tipo de remodelación antes de generar conceptos.');
   }
 
   return { valid: errors.length === 0, errors };
 }
+
+export { DEFAULT_PORCENTAJE_INCREMENTO };

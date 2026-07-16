@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.2.3] — 2026-07-16
+
+### Cambiado
+- Porcentaje de incremento editable (`porcentaje_incremento`, default 20); fórmula `monto × (1 + %/100)`
+- PDF muestra ferretería ficticia persistente por remisión (sin dirección Mariano Escobedo)
+
+### Eliminado
+- Dirección fija “MARIANO ESCOBEDO…” del PDF
+
 ## [0.2.2] — 2026-07-14
 
 ### Corregido

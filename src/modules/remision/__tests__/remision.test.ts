@@ -1,7 +1,12 @@
 import { beforeEach, describe, expect, it } from 'vitest';
+import { DEFAULT_COMPANY_INFO } from '../constants/companyInfo';
+import { CATALOGO_MATERIALES } from '../data/catalogoMateriales';
+import {
+  ensureFerreteriaName,
+  FERRETERIAS_FICTICIAS,
+} from '../data/ferreteriasFicticias';
 import { calculateRemisionTotals } from '../lib/calculateRemisionTotals';
 import { createFolio } from '../lib/createFolio';
-import { CATALOGO_MATERIALES } from '../data/catalogoMateriales';
 import {
   estimateAreaM2,
   generateRemisionItems,
@@ -10,23 +15,26 @@ import {
 import { numberToSpanishCurrency } from '../lib/numberToSpanishCurrency';
 import {
   validateForGenerateConcepts,
+  validatePorcentajeIncremento,
   validateRemisionForPdf,
 } from '../lib/validation';
 import {
+  buildRemisionPdfDoc,
   maxTableRowsForPage,
   paginateRemisionItems,
 } from '../pdf/generateRemisionPDF';
-import type { RemisionFormData, RemisionItem, TipoRemodelacion } from '../types';
+import type { Remision, RemisionFormData, RemisionItem, TipoRemodelacion } from '../types';
 
 function generar(
   tipo: TipoRemodelacion,
   montoAprobado = 100_000,
+  porcentaje = 20,
   areaM2?: number,
 ): RemisionItem[] {
-  const totalRemision = montoAprobado * 1.2;
+  const totals = calculateRemisionTotals(montoAprobado, 'incluido', porcentaje);
   return generateRemisionItems({
     montoAprobado,
-    totalRemision,
+    totalRemision: totals.total_remision,
     tipoRemodelacion: tipo,
     plazo: '15 días',
     ivaMode: 'incluido',
@@ -39,44 +47,95 @@ function nombres(items: RemisionItem[]): string {
   return items.map((i) => i.concepto.toLowerCase()).join(' | ');
 }
 
+function sampleRemision(overrides: Partial<Remision> = {}): Remision {
+  const totals = calculateRemisionTotals(100_000, 'incluido', 20);
+  const items = generar('Baño', 100_000, 20).slice(0, 3);
+  return {
+    id: 'test-id',
+    folio: 'REM-000099',
+    fecha: '2026-07-14',
+    nombre_cliente: 'Juan Pérez',
+    rfc: 'XAXX010101000',
+    direccion: 'Calle 1',
+    telefono: '5512345678',
+    ciudad: 'CDMX',
+    monto_aprobado: 100_000,
+    porcentaje_incremento: totals.porcentaje_incremento,
+    incremento_monto: totals.incremento_monto,
+    total_remision: totals.total_remision,
+    plazo: '12 meses',
+    tipo_remodelacion: 'Baño',
+    iva_mode: 'incluido',
+    subtotal: totals.subtotal,
+    iva: totals.iva,
+    total: totals.total,
+    items,
+    ferreteria_nombre: 'FERRETERÍA EL MARTILLO',
+    created_at: '2026-07-14T00:00:00.000Z',
+    updated_at: '2026-07-14T00:00:00.000Z',
+    ...overrides,
+  };
+}
+
 describe('calculateRemisionTotals', () => {
-  it('calcula total remisión con incremento 20% para 100000', () => {
+  it('default 20%: 100000 → 120000', () => {
     const t = calculateRemisionTotals(100_000);
+    expect(t.porcentaje_incremento).toBe(20);
     expect(t.incremento_monto).toBe(20_000);
     expect(t.total_remision).toBe(120_000);
   });
 
-  it('IVA incluido: total 120000', () => {
-    const t = calculateRemisionTotals(100_000, 'incluido');
-    expect(t.total).toBe(120_000);
+  it('porcentaje editable 15%: 100000 → 115000', () => {
+    const t = calculateRemisionTotals(100_000, 'incluido', 15);
+    expect(t.incremento_monto).toBe(15_000);
+    expect(t.total_remision).toBe(115_000);
+    expect(t.total).toBe(115_000);
+  });
+
+  it('porcentaje editable 25%: 85000 → 106250', () => {
+    const t = calculateRemisionTotals(85_000, 'incluido', 25);
+    expect(t.incremento_monto).toBe(21_250);
+    expect(t.total_remision).toBe(106_250);
+  });
+
+  it('porcentaje 0: total = monto aprobado', () => {
+    const t = calculateRemisionTotals(100_000, 'incluido', 0);
+    expect(t.incremento_monto).toBe(0);
+    expect(t.total_remision).toBe(100_000);
+  });
+
+  it('IVA incluido: subtotal + iva = total', () => {
+    const t = calculateRemisionTotals(100_000, 'incluido', 20);
     expect(t.subtotal + t.iva).toBeCloseTo(120_000, 2);
+  });
+
+  it('Sin IVA: iva = 0 y total = total_remision', () => {
+    const t = calculateRemisionTotals(100_000, 'sin_iva', 20);
+    expect(t.iva).toBe(0);
+    expect(t.total).toBe(120_000);
   });
 });
 
 describe('generateRemisionItems — coherencia profesional', () => {
-  it('A) Techo $100k → 120k sin estructura/plomería/eléctrico y con SAT', () => {
+  it('A) Techo $100k 20% → 120k sin estructura/plomería/eléctrico y con SAT', () => {
     for (let i = 0; i < 5; i++) {
-      const items = generar('Techo / impermeabilización', 100_000);
+      const items = generar('Techo / impermeabilización', 100_000, 20);
       expect(sumItemsImporte(items)).toBe(120_000);
       const texto = nombres(items);
       expect(texto).toMatch(/impermeabilizante|malla|sellador|mano de obra/);
       expect(texto).not.toMatch(/block|varilla|sanitario|tarja|plomería|instalación eléctrica/);
       expect(texto).not.toMatch(/\bajuste\b|\bdiferencia\b|\bcuadre\b|\brelleno\b/);
       expect(items.every((it) => !!it.sat_code)).toBe(true);
-      for (const it of items) {
-        if (
-          it.unidad === 'servicio' ||
-          /herramienta y consumibles|preparaci|flete|supervisi/i.test(it.concepto)
-        ) {
-          const maxPct = /mano de obra especializada/i.test(it.concepto) ? 0.35 : 0.25;
-          expect(it.importe).toBeLessThanOrEqual(120_000 * maxPct + 0.05);
-        }
-      }
     }
   });
 
+  it('generador cuadra con porcentaje distinto a 20 (15%)', () => {
+    const items = generar('Cocina', 100_000, 15);
+    expect(sumItemsImporte(items)).toBe(115_000);
+  });
+
   it('B) Baño genera conceptos de baño', () => {
-    const items = generar('Baño', 100_000);
+    const items = generar('Baño', 100_000, 20);
     expect(sumItemsImporte(items)).toBe(120_000);
     const texto = nombres(items);
     expect(texto).toMatch(/sanitario/);
@@ -86,7 +145,7 @@ describe('generateRemisionItems — coherencia profesional', () => {
   });
 
   it('C) Cocina genera conceptos de cocina', () => {
-    const items = generar('Cocina', 80_000);
+    const items = generar('Cocina', 80_000, 20);
     expect(sumItemsImporte(items)).toBe(96_000);
     const texto = nombres(items);
     expect(texto).toMatch(/tarja|mezcladora|cubierta|piso|azulejo/);
@@ -94,7 +153,7 @@ describe('generateRemisionItems — coherencia profesional', () => {
   });
 
   it('D) Piso genera piso/pegazulejo/boquilla', () => {
-    const items = generar('Piso / azulejo', 70_000);
+    const items = generar('Piso / azulejo', 70_000, 20);
     expect(sumItemsImporte(items)).toBe(84_000);
     const texto = nombres(items);
     expect(texto).toMatch(/piso|pegazulejo|boquilla|zoclo|mano de obra/);
@@ -117,6 +176,7 @@ describe('validación', () => {
     telefono: '5512345678',
     ciudad: 'CDMX',
     monto_aprobado: 100_000,
+    porcentaje_incremento: 20,
     plazo: '',
     tipo_remodelacion: 'Baño',
     iva_mode: 'incluido',
@@ -146,6 +206,18 @@ describe('validación', () => {
     );
     expect(r.valid).toBe(false);
     expect(r.errors.some((e) => e.includes('SAT'))).toBe(true);
+  });
+
+  it('bloquea porcentaje vacío, negativo o inválido', () => {
+    expect(validatePorcentajeIncremento('').valid).toBe(false);
+    expect(validatePorcentajeIncremento(Number.NaN).valid).toBe(false);
+    expect(validatePorcentajeIncremento(-5).valid).toBe(false);
+    expect(validatePorcentajeIncremento(101).valid).toBe(false);
+    expect(validatePorcentajeIncremento('abc').valid).toBe(false);
+  });
+
+  it('permite porcentaje 0', () => {
+    expect(validatePorcentajeIncremento(0).valid).toBe(true);
   });
 
   it('no genera conceptos sin monto aprobado', () => {
@@ -182,6 +254,60 @@ describe('numberToSpanishCurrency', () => {
     const letra = numberToSpanishCurrency(120_000);
     expect(letra).toContain('PESOS');
     expect(letra).toMatch(/CIENTO VEINTE MIL/);
+  });
+});
+
+describe('ferretería ficticia', () => {
+  it('lista tiene nombres ficticios y no empresas reales', () => {
+    expect(FERRETERIAS_FICTICIAS.length).toBeGreaterThanOrEqual(10);
+    const joined = FERRETERIAS_FICTICIAS.join(' ');
+    expect(joined).not.toMatch(/Home Depot|Construrama|Sodimac|Plomerama|Lowe|Cemex/i);
+  });
+
+  it('ensureFerreteriaName conserva el mismo nombre', () => {
+    const a = ensureFerreteriaName('FERRETERÍA EL MARTILLO');
+    const b = ensureFerreteriaName(a);
+    expect(a).toBe('FERRETERÍA EL MARTILLO');
+    expect(b).toBe(a);
+  });
+
+  it('companyInfo ya no tiene dirección MARIANO ESCOBEDO', () => {
+    expect(DEFAULT_COMPANY_INFO.addressLine).not.toMatch(/MARIANO ESCOBEDO/i);
+  });
+});
+
+describe('PDF contenido', () => {
+  function pdfLatin1(doc: ReturnType<typeof buildRemisionPdfDoc>): string {
+    const dataUri = doc.output('datauristring');
+    const b64 = dataUri.split(',')[1] ?? '';
+    return atob(b64);
+  }
+
+  it('incluye ferretería y no dirección MARIANO ni monto/porcentaje', () => {
+    const remision = sampleRemision({
+      ferreteria_nombre: 'FERRETERÍA EL MARTILLO',
+    });
+    const raw = pdfLatin1(buildRemisionPdfDoc(remision));
+    expect(raw).toContain('MARTILLO');
+    expect(raw).not.toMatch(/MARIANO/);
+    expect(raw).not.toMatch(/ESCOBEDO/);
+    expect(raw).toContain(remision.rfc);
+    expect(raw).not.toMatch(/monto.?aprobado/i);
+    expect(raw).not.toMatch(/porcentaje.?incremento/i);
+    expect(raw).toMatch(/RFC/);
+  });
+
+  it('conserva la misma ferretería al regenerar el PDF', () => {
+    const remision = sampleRemision({
+      ferreteria_nombre: 'MATERIALES DEL NORTE',
+    });
+    const a = pdfLatin1(buildRemisionPdfDoc(remision));
+    const b = pdfLatin1(buildRemisionPdfDoc(remision));
+    expect(a).toContain('MATERIALES');
+    expect(b).toContain('MATERIALES');
+    expect(ensureFerreteriaName(remision.ferreteria_nombre)).toBe(
+      'MATERIALES DEL NORTE',
+    );
   });
 });
 

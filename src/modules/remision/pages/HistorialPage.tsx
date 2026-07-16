@@ -31,7 +31,9 @@ export function HistorialPage() {
   };
 
   const handlePdf = (remision: Remision) => {
-    generateRemisionPDF(remision);
+    // Persiste ferretería/porcentaje migrados antes de descargar
+    const saved = remisionStorage.save(remision);
+    generateRemisionPDF(saved);
   };
 
   return (
@@ -58,6 +60,7 @@ export function HistorialPage() {
                 <th>Fecha</th>
                 <th>Tipo</th>
                 <th>Monto aprobado</th>
+                <th>% Inc.</th>
                 <th>Total remisión</th>
                 <th>Plazo</th>
                 <th>Acciones</th>
@@ -71,6 +74,7 @@ export function HistorialPage() {
                   <td>{formatFecha(r.fecha)}</td>
                   <td>{r.tipo_remodelacion}</td>
                   <td>{formatCurrencyMXN(r.monto_aprobado)}</td>
+                  <td>{r.porcentaje_incremento}%</td>
                   <td>{formatCurrencyMXN(r.total_remision)}</td>
                   <td>{r.plazo}</td>
                   <td className="actions-cell">

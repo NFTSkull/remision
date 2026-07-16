@@ -62,6 +62,8 @@ export interface RemisionFormData {
   telefono: string;
   ciudad: string;
   monto_aprobado: number;
+  /** Porcentaje editable; default 20 al crear. */
+  porcentaje_incremento: number;
   plazo: string;
   tipo_remodelacion: TipoRemodelacion | '';
   iva_mode: IvaMode;
@@ -69,7 +71,7 @@ export interface RemisionFormData {
 }
 
 export interface RemisionTotals {
-  incremento_porcentaje: number;
+  porcentaje_incremento: number;
   incremento_monto: number;
   total_remision: number;
   subtotal: number;
@@ -94,7 +96,7 @@ export interface Remision {
   telefono: string;
   ciudad: string;
   monto_aprobado: number;
-  incremento_porcentaje: number;
+  porcentaje_incremento: number;
   incremento_monto: number;
   total_remision: number;
   plazo: string;
@@ -105,6 +107,8 @@ export interface Remision {
   iva: number;
   total: number;
   items: RemisionItem[];
+  /** Nombre ficticio del emisor en PDF; se asigna una sola vez. */
+  ferreteria_nombre?: string;
   created_at: string;
   updated_at: string;
 }

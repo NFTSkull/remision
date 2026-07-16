@@ -5,7 +5,7 @@
  */
 import jsPDF from 'jspdf';
 import type { Remision, RemisionItem } from '../types';
-import { DEFAULT_COMPANY_INFO } from '../constants/companyInfo';
+import { ensureFerreteriaName } from '../data/ferreteriasFicticias';
 import { formatCurrencyMXN } from '../lib/formatCurrencyMXN';
 import { numberToSpanishCurrency } from '../lib/numberToSpanishCurrency';
 import { normalizeMoney } from '../lib/normalizeMoney';
@@ -235,10 +235,12 @@ function drawPageHeader(
 
   y += REM_TITLE_H + FECHA_H + GAP_AFTER_HEADER;
 
+  // Emisor: ferretería ficticia (sin dirección fija ni datos de empresas reales)
+  const ferreteria = ensureFerreteriaName(remision.ferreteria_nombre);
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(7.5);
+  doc.setFontSize(9);
   doc.setTextColor(...NEGRO);
-  doc.text(DEFAULT_COMPANY_INFO.addressLine, pageW / 2, y + 2.2, {
+  doc.text(ferreteria, pageW / 2, y + 2.2, {
     align: 'center',
     maxWidth: contentW - 4,
   });
@@ -428,7 +430,7 @@ function drawLastFooter(
   doc.text(`Folio: ${remision.folio}`, pageW / 2, y + 3.5, { align: 'center' });
 }
 
-export function generateRemisionPDF(remision: Remision): void {
+export function buildRemisionPdfDoc(remision: Remision): jsPDF {
   const doc = new jsPDF({ unit: 'mm', format: 'letter' });
   const pageW = doc.internal.pageSize.getWidth();
   const pageH = doc.internal.pageSize.getHeight();
@@ -504,5 +506,9 @@ export function generateRemisionPDF(remision: Remision): void {
     });
   });
 
-  doc.save(`${remision.folio}.pdf`);
+  return doc;
+}
+
+export function generateRemisionPDF(remision: Remision): void {
+  buildRemisionPdfDoc(remision).save(`${remision.folio}.pdf`);
 }
