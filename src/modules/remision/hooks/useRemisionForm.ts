@@ -82,6 +82,8 @@ export function useRemisionForm(initialRemision?: Remision | null) {
   const [items, setItems] = useState<RemisionItem[]>(
     () => initialRemision?.items ?? [],
   );
+  const itemsLenRef = useRef(items.length);
+  itemsLenRef.current = items.length;
 
   const identityRef = useRef<Identity | null>(
     initialRemision
@@ -127,10 +129,23 @@ export function useRemisionForm(initialRemision?: Remision | null) {
     (key: keyof RemisionFormData, value: RemisionFormData[keyof RemisionFormData]) => {
       setForm((prev) => ({ ...prev, [key]: value }));
       setErrors([]);
-      setSuccessMsg(null);
+
+      if (key === 'monto_aprobado' || key === 'porcentaje_incremento') {
+        if (itemsLenRef.current > 0) {
+          setItems([]);
+          setSuccessMsg(
+            'Los conceptos se limpiaron porque cambió el monto o el porcentaje. Regenera los conceptos.',
+          );
+        } else {
+          setSuccessMsg(null);
+        }
+      } else {
+        setSuccessMsg(null);
+      }
     },
     [],
   );
+
 
   const handleGenerateConcepts = useCallback(() => {
     const validation = validateForGenerateConcepts(form);
@@ -139,9 +154,18 @@ export function useRemisionForm(initialRemision?: Remision | null) {
       return;
     }
 
+    const pct = Number.isFinite(form.porcentaje_incremento)
+      ? form.porcentaje_incremento
+      : DEFAULT_PORCENTAJE_INCREMENTO;
+    const totalsActuales = calculateRemisionTotals(
+      Number(form.monto_aprobado) || 0,
+      form.iva_mode,
+      pct,
+    );
+
     const generated = generateRemisionItems({
-      montoAprobado: form.monto_aprobado,
-      totalRemision: totals.total_remision,
+      montoAprobado: Number(form.monto_aprobado) || 0,
+      totalRemision: totalsActuales.total_remision,
       tipoRemodelacion: form.tipo_remodelacion as TipoRemodelacion,
       plazo: form.plazo,
       ivaMode: form.iva_mode,
@@ -152,7 +176,7 @@ export function useRemisionForm(initialRemision?: Remision | null) {
     setItems(generated);
     setErrors([]);
     setSuccessMsg('Conceptos generados correctamente.');
-  }, [form, totals.total_remision]);
+  }, [form]);
 
   const handleAddItem = useCallback(() => {
     setItems((prev) => [

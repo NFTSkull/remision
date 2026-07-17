@@ -45,4 +45,4 @@ Obligatorios: fecha, nombre, RFC, dirección, teléfono, ciudad, monto_aprobado 
 
 Por partida: cantidad > 0, precio > 0, `sat_code` no vacío.
 
-Cuadre: `suma(items.importe) === total_remision` y `subtotal + iva === total` (IVA incluido).
+Cuadre: `suma(items.importe) === total_remision` (tras generar/regenerar el generador garantiza el cuadre; PDF/guardar bloquean mismatch con mensaje de regenerar).

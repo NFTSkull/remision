@@ -90,7 +90,7 @@ export function validateRemisionForPdf(
     const suma = normalizeMoney(items.reduce((s, i) => s + i.importe, 0));
     if (Math.abs(suma - totalRemision) >= 0.01) {
       errors.push(
-        'La suma de conceptos debe cuadrar exactamente con el total de remisión.',
+        'La suma de conceptos no coincide con el total. Regenera o ajusta los conceptos.',
       );
     }
 

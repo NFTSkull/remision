@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.2.6] — 2026-07-17
+
+### Corregido
+- Generación automática de conceptos: la suma de partidas cuadra exactamente con `total_remision` (incl. montos bajos y % distinto de 20); al cambiar monto/% se limpian conceptos para forzar regenerar
+
 ## [0.2.5] — 2026-07-16
 
 ### Cambiado

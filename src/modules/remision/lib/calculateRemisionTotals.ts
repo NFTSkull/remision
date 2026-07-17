@@ -15,11 +15,16 @@ export function calculateRemisionTotals(
   ivaMode: IvaMode = 'incluido',
   porcentajeIncremento: number = DEFAULT_PORCENTAJE_INCREMENTO,
 ): RemisionTotals {
-  const porcentaje_incremento = porcentajeIncremento;
+  const monto = Number(montoAprobado);
+  const montoSafe = Number.isFinite(monto) ? monto : 0;
+  const pctRaw = Number(porcentajeIncremento);
+  const porcentaje_incremento = Number.isFinite(pctRaw)
+    ? pctRaw
+    : DEFAULT_PORCENTAJE_INCREMENTO;
   const incremento_monto = normalizeMoney(
-    montoAprobado * (porcentaje_incremento / 100),
+    montoSafe * (porcentaje_incremento / 100),
   );
-  const total_remision = normalizeMoney(montoAprobado + incremento_monto);
+  const total_remision = normalizeMoney(montoSafe + incremento_monto);
 
   if (ivaMode === 'incluido') {
     const subtotal = normalizeMoney(total_remision / (1 + IVA_RATE));

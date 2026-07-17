@@ -823,10 +823,15 @@ function distribuirRemanente(
   let remanente = normalizeMoney(totalRemision - suma);
 
   if (Math.abs(remanente) < 0.01) {
-    return aplicarTopesServicio(items, totalRemision, catalogo, balancePoolIds);
+    return ajustarItemsAlTarget(items, totalRemision, catalogo);
   }
 
-  // Asegurar pool de balance disponible en la lista
+  // Si ya nos pasamos del target, no sembrar más partidas: escalar/ajustar al target.
+  if (remanente < 0) {
+    return ajustarItemsAlTarget(items, totalRemision, catalogo);
+  }
+
+  // Asegurar pool de balance disponible en la lista (solo si hay remanente positivo)
   const poolIds = balancePoolIds.length > 0 ? balancePoolIds : BALANCE_POOL_DEFAULT;
   const balanceItems: RemisionItem[] = [];
 
@@ -841,10 +846,18 @@ function distribuirRemanente(
     }
     const mat = byId(catalogo, id);
     if (!mat) continue;
+    // Sembrar con base mínima; el remanente se reparte después.
+    const base = Math.min(
+      Math.max(mat.precio_sugerido, 500),
+      normalizeMoney(remanente / Math.max(2, poolIds.length)),
+    );
+    if (base < 1) continue;
     const nuevo = crearItemDesdeCatalogo(mat, 1, undefined, mat.nombre);
-    const seeded = setImporte(nuevo, Math.max(mat.precio_sugerido, 500));
+    const seeded = setImporte(nuevo, base);
     items.push(seeded);
     balanceItems.push(seeded);
+    remanente = normalizeMoney(remanente - base);
+    if (remanente < 1) break;
   }
 
   // Recalcular remanente tras sembrar base
@@ -852,7 +865,7 @@ function distribuirRemanente(
   remanente = normalizeMoney(totalRemision - suma);
 
   if (remanente <= 0) {
-    return cuadrarCentavos(aplicarTopesServicio(items, totalRemision, catalogo, poolIds), totalRemision);
+    return ajustarItemsAlTarget(items, totalRemision, catalogo);
   }
 
   const umbralSplit = totalRemision * SPLIT_THRESHOLD_PCT;
@@ -871,10 +884,10 @@ function distribuirRemanente(
 
   const targets = sinks.slice(0, nPartidas);
   if (targets.length === 0) {
-    const mat = byId(catalogo, 'mo-007') ?? catalogo[0];
+    const mat = byId(catalogo, 'mo-008') ?? byId(catalogo, 'mo-007') ?? catalogo[0];
     const extra = setImporte(crearItemDesdeCatalogo(mat, 1), remanente);
     items.push(extra);
-    return cuadrarCentavos(items, totalRemision);
+    return ajustarItemsAlTarget(items, totalRemision, catalogo);
   }
 
   // Pesos: MO especializada un poco más, resto pareja
@@ -929,9 +942,10 @@ function distribuirRemanente(
     }
   }
 
-  return cuadrarCentavos(
+  return ajustarItemsAlTarget(
     aplicarTopesServicio(items, totalRemision, catalogo, poolIds),
     totalRemision,
+    catalogo,
   );
 }
 
@@ -982,32 +996,154 @@ function aplicarTopesServicio(
   return result;
 }
 
-function cuadrarCentavos(items: RemisionItem[], totalRemision: number): RemisionItem[] {
-  const result = items.map((i) => ({ ...i })).filter((i) => i.importe >= 0.01);
-  const suma = normalizeMoney(result.reduce((s, i) => s + i.importe, 0));
-  const diff = normalizeMoney(totalRemision - suma);
-  if (Math.abs(diff) < 0.01) return result;
-
-  // Preferir sink pequeño con capacidad
-  let idx = result.findIndex(
-    (i) =>
-      /herramienta y consumibles|supervisi|flete y acarreo/i.test(i.concepto) &&
-      i.importe + diff <= topeImporte(i.concepto, totalRemision) + 0.01,
-  );
-  if (idx === -1) {
-    idx = result.findIndex(
-      (i) =>
-        esServicioCapado(i) &&
-        i.importe + diff <= topeImporte(i.concepto, totalRemision) + 0.01,
-    );
+function preferSinkIndex(items: RemisionItem[]): number {
+  const preferidos = [
+    /herramienta y consumibles/i,
+    /servicio de instalaci[oó]n general/i,
+    /mano de obra especializada/i,
+    /flete y acarreo/i,
+    /preparaci[oó]n (de |y )?superficie/i,
+    /supervisi[oó]n/i,
+  ];
+  for (const re of preferidos) {
+    const idx = items.findIndex((i) => re.test(i.concepto) && i.unidad === 'servicio');
+    if (idx >= 0) return idx;
   }
-  if (idx === -1) idx = result.length - 1;
+  const servicio = items.findIndex((i) => esServicioCapado(i));
+  if (servicio >= 0) return servicio;
+  return items.length - 1;
+}
 
-  result[idx] = setImporte(result[idx], result[idx].importe + diff);
-  return result.map((i) => ({
-    ...i,
-    concepto: sanitizarConcepto(i.concepto),
-  }));
+/**
+ * Garantiza sum(items.importe) === target (centavos exactos).
+ * Si hay exceso grande (receta dura > total), escala proporcionalmente y
+ * corrige centavos en una partida de servicio válida.
+ */
+function ajustarItemsAlTarget(
+  items: RemisionItem[],
+  target: number,
+  catalogo: CatalogoMaterial[],
+): RemisionItem[] {
+  const targetN = normalizeMoney(target);
+  let result = items
+    .map((i) => ({ ...i }))
+    .filter((i) => i.cantidad > 0 && i.importe >= 0.01);
+
+  if (result.length === 0) {
+    const mat =
+      byId(catalogo, 'mo-008') ??
+      byId(catalogo, 'mo-007') ??
+      catalogo.find((c) => c.unidad === 'servicio') ??
+      catalogo[0];
+    if (!mat) return [];
+    return [
+      setImporte(
+        crearItemDesdeCatalogo(mat, 1, undefined, 'Servicio de instalación general'),
+        targetN,
+      ),
+    ];
+  }
+
+  let suma = sumItemsImporte(result);
+  let diff = normalizeMoney(targetN - suma);
+
+  // Exceso grande: escalar todas las partidas al target
+  if (diff < -0.01 && suma > 0) {
+    const factor = targetN / suma;
+    result = result.map((i) => setImporte(i, normalizeMoney(i.importe * factor)));
+    // Eliminar casi-ceros tras escalado
+    result = result.filter((i) => i.importe >= 0.01);
+    if (result.length === 0) {
+      const mat = byId(catalogo, 'mo-008') ?? byId(catalogo, 'mo-007') ?? catalogo[0];
+      return [
+        setImporte(
+          crearItemDesdeCatalogo(mat, 1, undefined, 'Servicio de instalación general'),
+          targetN,
+        ),
+      ];
+    }
+    suma = sumItemsImporte(result);
+    diff = normalizeMoney(targetN - suma);
+  }
+
+  if (Math.abs(diff) < 0.01) {
+    return result.map((i) => ({ ...i, concepto: sanitizarConcepto(i.concepto) }));
+  }
+
+  // Falta dinero: preferir sink de servicio; si no cabe, crear partida de servicio
+  if (diff > 0.01) {
+    let idx = preferSinkIndex(result);
+    const candidato = result[idx];
+    const tope = topeImporte(candidato.concepto, targetN);
+    if (
+      esServicioCapado(candidato) &&
+      candidato.importe + diff > tope + 0.01
+    ) {
+      const mat = byId(catalogo, 'mo-008') ?? byId(catalogo, 'mo-007');
+      if (mat) {
+        const ya = result.findIndex(
+          (r) => r.concepto === sanitizarConcepto(mat.nombre),
+        );
+        if (ya >= 0) {
+          result[ya] = setImporte(result[ya], result[ya].importe + diff);
+        } else {
+          result.push(
+            setImporte(
+              crearItemDesdeCatalogo(mat, 1, undefined, mat.nombre),
+              diff,
+            ),
+          );
+        }
+        return result.map((i) => ({ ...i, concepto: sanitizarConcepto(i.concepto) }));
+      }
+    }
+    result[idx] = setImporte(result[idx], result[idx].importe + diff);
+    return result.map((i) => ({ ...i, concepto: sanitizarConcepto(i.concepto) }));
+  }
+
+  // Sobra poco (centavos tras escalado): reducir sink preferido
+  let idx = preferSinkIndex(result);
+  const reducido = normalizeMoney(result[idx].importe + diff); // diff negativo
+  if (reducido >= 0.01) {
+    result[idx] = setImporte(result[idx], reducido);
+  } else {
+    // Repartir reducción en varias partidas de mayor a menor
+    let falta = normalizeMoney(-diff);
+    const orden = [...result.keys()].sort(
+      (a, b) => result[b].importe - result[a].importe,
+    );
+    for (const i of orden) {
+      if (falta < 0.01) break;
+      const disponible = normalizeMoney(result[i].importe - 0.01);
+      if (disponible <= 0) continue;
+      const quita = Math.min(disponible, falta);
+      result[i] = setImporte(result[i], result[i].importe - quita);
+      falta = normalizeMoney(falta - quita);
+    }
+  }
+
+  // Último seguro de centavos
+  suma = sumItemsImporte(result);
+  diff = normalizeMoney(targetN - suma);
+  if (Math.abs(diff) >= 0.01) {
+    idx = preferSinkIndex(result);
+    const nuevo = normalizeMoney(result[idx].importe + diff);
+    if (nuevo >= 0.01) {
+      result[idx] = setImporte(result[idx], nuevo);
+    } else if (diff > 0) {
+      const mat = byId(catalogo, 'mo-008') ?? byId(catalogo, 'mo-007') ?? catalogo[0];
+      result.push(
+        setImporte(
+          crearItemDesdeCatalogo(mat, 1, undefined, 'Servicio de instalación general'),
+          diff,
+        ),
+      );
+    }
+  }
+
+  return result
+    .filter((i) => i.importe >= 0.01)
+    .map((i) => ({ ...i, concepto: sanitizarConcepto(i.concepto) }));
 }
 
 function ordenarProfesional(items: RemisionItem[]): RemisionItem[] {
@@ -1056,13 +1192,8 @@ export function generateRemisionItems(
   items = ordenarProfesional(items);
   items = assertSinPalabrasProhibidas(items);
 
-  // Garantizar cuadre exacto final
-  const suma = normalizeMoney(items.reduce((s, i) => s + i.importe, 0));
-  if (Math.abs(suma - totalRemision) >= 0.01) {
-    items = cuadrarCentavos(items, totalRemision);
-  }
-
-  return items;
+  // Garantizar cuadre exacto final contra params.totalRemision (nunca 20% fijo)
+  return ajustarItemsAlTarget(items, totalRemision, catalogo);
 }
 
 export function recalcularItemImporte(

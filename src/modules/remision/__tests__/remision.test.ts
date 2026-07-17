@@ -169,6 +169,51 @@ describe('generateRemisionItems — coherencia profesional', () => {
     expect(area).toBeGreaterThanOrEqual(25);
     expect(area).toBeLessThanOrEqual(160);
   });
+
+  it('caso real: 19983.15 @ 10% cuadra exacto (Piso / azulejo)', () => {
+    const totals = calculateRemisionTotals(19983.15, 'incluido', 10);
+    expect(totals.total_remision).toBe(21981.47);
+    for (let i = 0; i < 8; i++) {
+      const items = generar('Piso / azulejo', 19983.15, 10);
+      expect(sumItemsImporte(items)).toBe(totals.total_remision);
+    }
+  });
+
+  it('100000 @ 20% → 120000', () => {
+    const items = generar('Baño', 100_000, 20);
+    expect(sumItemsImporte(items)).toBe(120_000);
+  });
+
+  it('100000 @ 15% → 115000', () => {
+    const items = generar('Remodelación general', 100_000, 15);
+    expect(sumItemsImporte(items)).toBe(115_000);
+  });
+
+  it('85000 @ 25% → 106250', () => {
+    const items = generar('Pintura', 85_000, 25);
+    expect(sumItemsImporte(items)).toBe(106_250);
+  });
+
+  it('100000 @ 0% → 100000', () => {
+    const items = generar('Cocina', 100_000, 0);
+    expect(sumItemsImporte(items)).toBe(100_000);
+  });
+
+  it('montos bajos con varios tipos cuadran con total_remision', () => {
+    const tipos: TipoRemodelacion[] = [
+      'Pintura',
+      'Baño',
+      'Remodelación general',
+      'Piso / azulejo',
+      'Techo / impermeabilización',
+    ];
+    const totals = calculateRemisionTotals(19983.15, 'incluido', 10);
+    for (const tipo of tipos) {
+      const items = generar(tipo, 19983.15, 10);
+      expect(sumItemsImporte(items)).toBe(totals.total_remision);
+      expect(nombres(items)).not.toMatch(/\bajuste\b|\bdiferencia\b|\bcuadre\b|\brelleno\b/);
+    }
+  });
 });
 
 describe('validación', () => {
@@ -241,6 +286,35 @@ describe('validación', () => {
       monto_aprobado: 0,
     });
     expect(r.valid).toBe(false);
+  });
+
+  it('bloquea PDF/guardar si suma de conceptos no cuadra con total', () => {
+    const r = validateRemisionForPdf(
+      { ...baseForm, plazo: '10 días', porcentaje_incremento: 10, monto_aprobado: 19983.15 },
+      [
+        {
+          ...itemOk,
+          precio_unitario: 31400.01,
+          importe: 31400.01,
+        },
+      ],
+      21981.47,
+    );
+    expect(r.valid).toBe(false);
+    expect(r.errors.some((e) => /no coincide con el total|Regenera/i.test(e))).toBe(
+      true,
+    );
+  });
+
+  it('permite PDF cuando suma cuadra con total_remision', () => {
+    const totals = calculateRemisionTotals(100_000, 'incluido', 20);
+    const items = generar('Baño', 100_000, 20);
+    const r = validateRemisionForPdf(
+      { ...baseForm, plazo: '10 días', monto_aprobado: 100_000, porcentaje_incremento: 20 },
+      items,
+      totals.total_remision,
+    );
+    expect(r.valid).toBe(true);
   });
 });
 

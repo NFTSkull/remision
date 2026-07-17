@@ -1,5 +1,16 @@
 # Devlog
 
+## 2026-07-17 — Cuadre exacto generateRemisionItems vs total_remision
+
+### Causa
+Con montos medios/bajos (ej. 19983.15 @ 10% → 21981.47) las partidas “duras” del catálogo ya sumaban ~31k. `cuadrarCentavos` solo ajustaba una partida y `setImporte` no podía absorber el exceso; además se sembraba el pool de balance con precios base aunque ya hubiera sobrado.
+
+### Decisión
+- No sembrar pool si remanente ≤ 0.
+- `ajustarItemsAlTarget`: si hay exceso grande, escala proporcional y corrige centavos en servicio preferido; garantiza `sum === totalRemision`.
+- Al cambiar monto/% en el form, limpiar conceptos y pedir regenerar.
+- Generar siempre con `calculateRemisionTotals` fresco (no estado stale).
+
 ## 2026-07-16 — Nombre emisor editable en PDF
 
 ### Problema
