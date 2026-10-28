@@ -485,25 +485,52 @@ select:focus {
   }
 }
 
-/* Piloto Precalix B2B — aislado de los formularios de remisiones */
-.pilot-page{max-width:940px;margin:0 auto}
-.pilot-hero{display:flex;align-items:center;justify-content:space-between;gap:1rem;padding:1.5rem;margin-bottom:1.4rem;background:linear-gradient(110deg,#e8f5ec,#fff);border:1px solid var(--verde-border);border-radius:12px}
-.pilot-hero small,.pilot-overview small{font-size:.72rem;letter-spacing:.1em;color:var(--verde-dark);font-weight:700}
-.pilot-hero h2{font-size:1.35rem;color:var(--verde-dark);margin:.35rem 0}
-.pilot-hero p,.pilot-description,.pilot-disclaimer{color:var(--gris-muted);font-size:.88rem;line-height:1.6}
-.pilot-state{font-size:.8rem;color:var(--verde-dark);background:#fff;padding:.55rem .8rem;border:1px solid var(--verde-border);border-radius:100px;white-space:nowrap;font-weight:600}
-.pilot-cases{display:flex;gap:.5rem;flex-wrap:wrap;margin:1.4rem 0}
-.pilot-cases button{cursor:pointer;background:#fff;border:1px solid var(--verde-border);color:var(--verde-dark);border-radius:6px;padding:.5rem .8rem}
-.pilot-cases button.active{background:var(--verde-dark);color:#fff}
-.pilot-consent{display:flex;flex-direction:row;align-items:flex-start;gap:.75rem;margin:1.1rem 0}
-.pilot-consent input{margin-top:.2rem;width:17px;height:17px;flex-shrink:0}
-.pilot-evidence{margin-top:1rem;max-width:500px}
-.pilot-overview{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1rem;padding:1rem;border-radius:8px;background:var(--verde-light)}
-.pilot-overview>div{display:flex;flex-direction:column;gap:.3rem;min-width:0;overflow-wrap:anywhere}
-.pilot-results h2{margin-bottom:1rem}
-.pilot-amounts{margin-top:1rem;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.5rem}
-.pilot-amounts>div{display:flex;flex-direction:column;gap:.1rem;padding:.85rem;background:#fafafa;border:1px solid #eee;border-radius:8px}
-.pilot-amounts span{font-size:.8rem;text-transform:capitalize;color:var(--gris-muted)}
-.pilot-amounts strong{color:var(--verde-dark)}
-.pilot-disclaimer{margin-top:1rem}
-@media(max-width:640px){.pilot-hero{align-items:flex-start;flex-direction:column}.pilot-overview,.pilot-amounts{grid-template-columns:1fr}.pilot-cases button{flex:1 1 auto}}
+/* Precalix B2B: experiencia de precalificación simple, sin consola técnica */
+.pilot-page{max-width:940px;margin:0 auto;padding-bottom:3rem}
+.pilot-page *{box-sizing:border-box}
+.pilot-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:1.5rem;margin-bottom:1.6rem}
+.pilot-heading h1{font-size:clamp(1.6rem,3vw,2rem);color:var(--verde-dark);font-weight:700;margin:0 0 .55rem}
+.pilot-heading p{color:var(--gris-muted);font-size:.94rem;line-height:1.65;margin:0}
+.pilot-status-chip{flex-shrink:0;border:1px solid var(--verde-border);background:#edf6f0;color:var(--verde-dark);font-size:.78rem;font-weight:650;border-radius:99px;padding:.48rem .85rem;letter-spacing:.01em}
+.pilot-entry,.pilot-output{background:#fff;border:1px solid var(--verde-border);box-shadow:0 3px 12px rgba(18,50,33,.055);border-radius:12px;padding:clamp(1.25rem,3vw,2rem);margin-bottom:1.2rem}
+.pilot-nss-form{display:block}
+.pilot-nss-form>label{display:block;font-size:.95rem;color:var(--verde-dark);font-weight:650;margin-bottom:.65rem}
+.pilot-nss-row{display:flex;align-items:stretch;gap:.75rem}
+.pilot-nss-row input{flex:1;min-width:0;width:100%;padding:.84rem 1rem;font-size:1.13rem;letter-spacing:.05em;font-weight:550;border:1px solid #c9d9d0;border-radius:8px;min-height:52px}
+.pilot-nss-row input:focus{border-color:var(--verde-primary);box-shadow:0 0 0 3px rgba(45,122,78,.10)}
+.pilot-nss-row .btn{font-size:1rem;font-weight:650;padding:.75rem 1.7rem;min-width:156px;border-radius:8px}
+.pilot-disclaimer{font-size:.8rem;color:var(--gris-muted);line-height:1.65;margin:1rem 0 0;max-width:740px}
+.pilot-access-note{border-radius:8px;background:#f5f8f6;border:1px solid var(--verde-border);padding:1rem;margin-top:1.2rem;font-size:.88rem;color:var(--verde-dark)}
+.pilot-access-note a{font-weight:700;color:var(--verde-primary);margin-left:.4rem;text-decoration:underline;text-underline-offset:3px}
+.pilot-error{color:#912d2d;border:1px solid #ecc2c2;background:#fff4f4;padding:.85rem 1rem;border-radius:8px;font-size:.86rem;margin:.9rem 0 0;line-height:1.5}
+.pilot-output-head{display:flex;gap:1rem;align-items:flex-start;justify-content:space-between;margin-bottom:1.2rem}
+.pilot-output-head h2{border:0;padding:0;margin:0 0 .4rem;font-size:1.22rem;color:var(--verde-dark)}
+.pilot-output-head p{margin:0;color:var(--gris-muted);font-size:.82rem}
+.pilot-refresh{border:0;background:transparent;color:var(--verde-primary);padding:.25rem 0;font-size:.82rem;cursor:pointer;text-decoration:underline;text-underline-offset:3px}
+.pilot-result-state{display:flex;align-items:center;gap:.65rem;background:#f5f8f6;padding:.9rem 1rem;border-radius:8px;margin-bottom:1.2rem;color:var(--verde-dark);font-size:.9rem}
+.pilot-result-state.waiting{background:#f5f7fa;color:#44546b}
+.pilot-result-state.neutral{background:#f7f7f7;color:#575757}
+.pilot-state-dot{width:9px;height:9px;flex:none;border-radius:50%;background:currentColor}
+.pilot-loader{margin-left:auto;width:17px;height:17px;border:2px solid #c5d0d9;border-top-color:#486480;border-radius:50%;animation:pilot-spin 1s linear infinite}
+@keyframes pilot-spin{to{transform:rotate(360deg)}}
+.pilot-pending-note,.pilot-empty-result,.pilot-result-notice{font-size:.87rem;line-height:1.7;color:var(--gris-muted)}
+.pilot-person{display:flex;flex-direction:column;gap:.3rem;padding:1.1rem 0 1.3rem;border-bottom:1px solid #e4eae6}
+.pilot-person>span,.pilot-main-amounts span{font-size:.76rem;color:var(--gris-muted)}
+.pilot-person strong{font-size:1.2rem;color:var(--verde-dark);overflow-wrap:anywhere}
+.pilot-person small{font-size:.78rem;color:var(--gris-muted)}
+.pilot-main-amounts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.9rem;margin:1.3rem 0}
+.pilot-main-amounts article{background:#edf6f0;border:1px solid #d4e8db;border-radius:10px;padding:1.2rem;display:flex;flex-direction:column;gap:.5rem}
+.pilot-main-amounts article strong{font-size:clamp(1.32rem,3vw,1.85rem);color:var(--verde-dark);font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.pilot-detail-list{border:1px solid #e5ebe7;border-radius:8px;overflow:hidden}
+.pilot-detail-list>div{display:flex;align-items:center;justify-content:space-between;gap:1rem;padding:1rem 1.15rem;font-size:.9rem;border-bottom:1px solid #e5ebe7}
+.pilot-detail-list>div:last-child{border-bottom:0}
+.pilot-detail-list>div>span{color:var(--gris-muted)}
+.pilot-detail-list strong{color:var(--verde-dark);font-size:.95rem;font-variant-numeric:tabular-nums}
+.pilot-detail-list strong.no-data{font-size:.82rem;color:var(--gris-muted);font-weight:500}
+.pilot-result-notice{margin:1.2rem 0 0}
+.pilot-login{max-width:520px}
+.pilot-login h1{font-size:1.65rem;margin:0 0 .65rem;color:var(--verde-dark)}
+.pilot-login p{color:var(--gris-muted);line-height:1.6}
+.pilot-login label{margin-bottom:.55rem}
+.pilot-login input{width:100%;margin-bottom:1rem;padding:.85rem}
+@media(max-width:640px){.pilot-heading{flex-direction:column;gap:.75rem}.pilot-nss-row{flex-direction:column}.pilot-nss-row .btn{width:100%}.pilot-main-amounts{grid-template-columns:1fr}.pilot-output-head{flex-direction:column}.pilot-detail-list>div{align-items:flex-start;flex-direction:column;gap:.35rem}}
