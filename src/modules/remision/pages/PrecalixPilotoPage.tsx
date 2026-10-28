@@ -13,11 +13,19 @@ type Valores = {
   ahorro_minimo_requerido?:number|null;
   capacidad_compra?:number|null;
   pago_mensual?:number|null;
+  nota_cambio_empleo?:string|null;
+};
+type DatosPrivados = {
+  nombre:string|null; nss:string|null; rfc:string|null;
+  empresa:string|null; registroPatronal:string|null;
+  edad:number|null; pension:number|null;
+  advertenciaInscripcion:string|null;
 };
 type Precalificacion = {
   id:string; folio?:string; estado?:string; estado_integracion?:string;
   nss_mascarado?:string; motivo?:string|null; en_proceso?:boolean;
-  resultado?:Valores|null; creado_en?:string; completado_en?:string|null;
+  resultado?:Valores|null; datos_titular?:DatosPrivados|null;
+  producto?:string|null; creado_en?:string; completado_en?:string|null;
 };
 type Respuesta = { precalificacion?:Precalificacion; sandbox?:boolean; error?:{codigo:string} };
 const UUID_DEMO = 'd5f2462d-a100-4d58-8f1d-46734479eb20';
@@ -151,13 +159,15 @@ export function PrecalixPilotoPage(){
     if(ultimoIntento.current?.nss!==nuevo)ultimoIntento.current=null;
   };
   const detalle=consulta?.resultado;
+  const titularPrivado=consulta?.datos_titular;
+  const texto=(dato:string|null|undefined) => dato?.trim() || "No informado";
   const enProceso=consulta?.en_proceso===true;
   const terminado=Boolean(consulta&&!enProceso);
   const hayMontos=Boolean(detalle);
   const restantes=detalle?[
-    campo('Saldo de la Subcuenta de Vivienda',detalle.saldo_subcuenta),
-    campo('Ahorro mínimo requerido',detalle.ahorro_minimo_requerido),
-    campo('Pago mensual estimado',detalle.pago_mensual),
+    campo('Monto de crédito',detalle.monto_credito),
+    campo('Monto mínimo de ahorro',detalle.ahorro_minimo_requerido),
+    campo('Pago mensual',detalle.pago_mensual),
   ]:[];
   return <main className="pilot-page">
     <header className="pilot-heading">
@@ -209,20 +219,55 @@ export function PrecalixPilotoPage(){
         {enProceso&&<span className="pilot-loader" aria-hidden="true"/>}
       </div>
       {enProceso&&<p className="pilot-pending-note">Estamos obteniendo la información. La pantalla se actualizará automáticamente cuando esté disponible.</p>}
-      {terminado&&hayMontos&&<>
-        <div className="pilot-person">
-          <span>Nombre del titular</span>
-          <strong>{detalle?.titular_nombre||'No informado'}</strong>
-          <small>{consulta?.nss_mascarado?'NSS '+consulta.nss_mascarado:''}</small>
-        </div>
-        <div className="pilot-main-amounts">
-          <article><span>Monto Mejoravit</span><strong>{IMPORTE(detalle?.monto_credito)}</strong></article>
-          <article><span>Capacidad de compra</span><strong>{IMPORTE(detalle?.capacidad_compra)}</strong></article>
-        </div>
-        <div className="pilot-detail-list">
-          {restantes.map(x=><div key={x.titulo}><span>{x.titulo}</span>
-            <strong className={x.ausente?'no-data':undefined}>{x.valor}</strong></div>)}
-        </div>
+      {terminado&&<>
+        <section className="pilot-data-section" aria-label="Datos del titular">
+          <h3>Datos del titular</h3>
+          <p className="pilot-private-note">Información privada de esta consulta. Visible únicamente para operadores autorizados; no se incluye en comprobantes públicos.</p>
+          <div className="pilot-person">
+            <span>Nombre completo</span>
+            <strong>{texto(titularPrivado?.nombre ?? detalle?.titular_nombre)}</strong>
+          </div>
+          <div className="pilot-identity-grid">
+            <div><span>Número de Seguro Social (NSS)</span>
+              <strong className="pilot-monospace">{texto(titularPrivado?.nss ?? consulta?.nss_mascarado)}</strong>
+              {!titularPrivado?.nss&&<small>Se muestra enmascarado porque el dato completo no está disponible.</small>}
+            </div>
+            <div><span>RFC</span><strong className="pilot-monospace">{texto(titularPrivado?.rfc)}</strong></div>
+            <div><span>Edad</span><strong>{titularPrivado?.edad!=null?titularPrivado.edad+' años':'No informado'}</strong></div>
+            <div><span>Pensión</span><strong>{IMPORTE(titularPrivado?.pension)}</strong></div>
+          </div>
+        </section>
+        {hayMontos&&<section className="pilot-data-section" aria-label="Montos de la precalificación">
+          <h3>Montos de la precalificación</h3>
+          <div className="pilot-main-amounts">
+            <article><span>Monto Mejoravit</span><strong>{IMPORTE(detalle?.saldo_subcuenta)}</strong>
+              <small>Corresponde al saldo de la Subcuenta de Vivienda que devuelve el portal.</small>
+            </article>
+            <article><span>Capacidad de compra</span><strong>{IMPORTE(detalle?.capacidad_compra)}</strong></article>
+          </div>
+          <div className="pilot-detail-list">
+            {restantes.map(x=><div key={x.titulo}><span>{x.titulo}</span>
+              <strong className={x.ausente?'no-data':undefined}>{x.valor}</strong></div>)}
+          </div>
+        </section>}
+        <section className="pilot-data-section" aria-label="Información laboral">
+          <h3>Información laboral</h3>
+          <div className="pilot-detail-list pilot-text-details">
+            <div><span>Empresa</span><strong>{texto(titularPrivado?.empresa)}</strong></div>
+            <div><span>Registro patronal</span><strong className="pilot-monospace">{texto(titularPrivado?.registroPatronal)}</strong></div>
+          </div>
+          {titularPrivado?.advertenciaInscripcion&&<p className="pilot-observation">Aviso de inscripción: {titularPrivado.advertenciaInscripcion}</p>}
+          {detalle?.nota_cambio_empleo&&<p className="pilot-observation">Observación: {detalle.nota_cambio_empleo}</p>}
+        </section>
+        <section className="pilot-data-section" aria-label="Datos de la consulta">
+          <h3>Datos de la consulta</h3>
+          <div className="pilot-detail-list pilot-text-details">
+            <div><span>Producto</span><strong>{consulta?.producto==='mejora'?'Mejoravit':texto(consulta?.producto)}</strong></div>
+            <div><span>Fecha de solicitud</span><strong>{consulta?.creado_en?new Date(consulta.creado_en).toLocaleString('es-MX',{dateStyle:'medium',timeStyle:'short'}):'No informado'}</strong></div>
+            <div><span>Fecha de resultado</span><strong>{consulta?.completado_en?new Date(consulta.completado_en).toLocaleString('es-MX',{dateStyle:'medium',timeStyle:'short'}):'No informado'}</strong></div>
+            <div><span>Folio</span><strong>{texto(consulta?.folio)}</strong></div>
+          </div>
+        </section>
       </>}
       {terminado&&!detalle&&<p className="pilot-empty-result">
         {consulta?.estado==='error'?'La consulta presentó un error técnico. No significa que la persona no cumpla los criterios.':
