@@ -5,7 +5,7 @@
  * Modo predeterminado: sandbox con NSS ficticio. El modo real requiere
  * habilitación explícita Y validación de cobro en Precalix: cerrado por defecto.
  */
-import { createHash, timingSafeEqual } from "node:crypto";
+import { autenticarOperador, demoPublicaSegura } from "./precalix-auth.js";
 
 const NSS_DEMO = "00000000000";
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -27,19 +27,15 @@ export function validarPeticionDeCrear(body, modo) {
   if (modo === "sandbox" && body.nss !== NSS_DEMO) return "SOLO_NSS_FICTICIO";
   if (typeof body.idempotency_key !== "string" || !UUID.test(body.idempotency_key)) return "ID_INVALIDO";
   if (body.consentimiento !== true) return "SIN_CONSENTIMIENTO";
-  if ((modo === "paid" || modo === "pilot_real") && (!EVIDENCIA.test(body.evidencia_consentimiento || "") ||
-      body.evidencia_consentimiento.startsWith("consent_demo"))) return "EVIDENCIA_REAL_REQUERIDA";
+  if (modo === "paid" || modo === "pilot_real") {
+    // La pulsación del botón es una declaración del operador AUTENTICADO,
+    // no sustituye obtener la autorización del titular.
+    const legacy = EVIDENCIA.test(body.evidencia_consentimiento || "") &&
+      !body.evidencia_consentimiento.startsWith("consent_demo");
+    if (!legacy && body.autorizacion_confirmada !== true) return "EVIDENCIA_REAL_REQUERIDA";
+  }
   if (modo === "sandbox" && !EVIDENCIA.test(body.evidencia_consentimiento || "")) return "EVIDENCIA_INVALIDA";
   return null;
-}
-
-function autenticarPiloto(req, config) {
-  const expected = config.REMISION_PRECALIX_PILOT_TOKEN_SHA256;
-  if (!expected || !/^[a-f0-9]{64}$/.test(expected)) return false;
-  const token = req.headers["x-pilot-token"];
-  if (typeof token !== "string" || token.length < 32 || token.length > 200) return false;
-  const digest = createHash("sha256").update(token).digest();
-  return timingSafeEqual(digest, Buffer.from(expected, "hex"));
 }
 
 function resolverProveedor(config, modo) {
@@ -65,6 +61,8 @@ export default async function handler(req, res) {
     return res.status(200).json({
       modo: modo === "paid" ? "cobro_por_uso" : modo === "pilot_real" ? "prueba_real" : "pruebas",
       disponible: modo !== "blocked" && modo !== "pilot_blocked",
+      autorizado: demoPublicaSegura(process.env,modo) || autenticarOperador(req,process.env),
+      requiere_acceso: !demoPublicaSegura(process.env,modo) && !autenticarOperador(req,process.env),
       precio_centavos: modo === "paid" ? 400 : 0,
       moneda: "MXN",
       nota: modo === "paid" ? "MXN 4 por consulta facturable, sin mensualidad" : modo === "pilot_real" ? "Consulta real con autorización del titular. El piloto no genera cargos al socio." : modo === "pilot_blocked" ? "Piloto real desactivado por seguridad." : "Datos simulados, sin consultas ni cargos",
@@ -76,7 +74,8 @@ export default async function handler(req, res) {
     res.setHeader("Allow", "GET, POST");
     return res.status(405).json({ error: { codigo:"METODO_NO_PERMITIDO" } });
   }
-  if (!autenticarPiloto(req, process.env)) return res.status(401).json({ error: {codigo:"ACCESO_PILOTO_INVALIDO"} });
+  if (!demoPublicaSegura(process.env,modo) && !autenticarOperador(req,process.env))
+    return res.status(401).json({ error: {codigo:"ACCESO_PILOTO_INVALIDO"} });
   const dest = resolverProveedor(process.env, modo);
   if (!dest) return res.status(503).json({ error: { codigo:"PROVEEDOR_NO_CONFIGURADO" } });
   let path = "precalificaciones";
@@ -92,9 +91,13 @@ export default async function handler(req, res) {
     const data = typeof req.body === "string" ? (() => { try{return JSON.parse(req.body);}catch{return null;} })() : req.body;
     const invalid = validarPeticionDeCrear(data,modo);
     if (invalid) return res.status(422).json({error:{codigo:invalid}});
+    const evidencia = (modo === "paid" || modo === "pilot_real") &&
+      data.autorizacion_confirmada === true
+      ? "declaracion_"+data.idempotency_key.replaceAll("-","")
+      : data.evidencia_consentimiento;
     content = JSON.stringify({
       nss: data.nss, producto: "mejora", idempotency_key: data.idempotency_key,
-      consentimiento: true, evidencia_consentimiento:data.evidencia_consentimiento,
+      consentimiento: true, evidencia_consentimiento:evidencia,
     });
     if (Buffer.byteLength(content) > 2048) return res.status(413).json({error:{codigo:"CUERPO_EXCESIVO"}});
   }
