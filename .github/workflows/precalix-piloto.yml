@@ -23,7 +23,7 @@ jobs:
           node-version: "24"
           cache: npm
       - run: npm ci --ignore-scripts
-      - run: node --test api/precalix.test.mjs
+      - run: node --test api/precalix.test.mjs api/precalix-auth.test.mjs
       - run: npm run typecheck
       - run: npm run lint
       - run: npm test -- --run
