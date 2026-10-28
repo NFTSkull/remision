@@ -103,6 +103,27 @@ export default async function handler(req, res) {
   const bypass = process.env.PRECALIX_VERCEL_PROTECTION_BYPASS;
   if (bypass) headers["x-vercel-protection-bypass"] = bypass;
   try {
+    // Doble seguro financiero: cambiar una variable en Remision NO habilita
+    // consultas pagadas si el PROVEEDOR no certifica la facturacion por uso.
+    // Hoy Precalix devuelve solo la billetera, por lo que falla cerrado.
+    if (modo === "paid") {
+      const contrato = await fetch(dest.baseUrl + "/api/v1/cuenta", {
+        method: "GET", headers, signal: AbortSignal.timeout(8000),
+        cache: "no-store", redirect: "manual",
+      });
+      const tipoContrato = contrato.headers.get("content-type") || "";
+      if (contrato.status !== 200 || !tipoContrato.includes("application/json")) {
+        return res.status(503).json({error:{codigo:"FACTURACION_NO_VERIFICADA"}});
+      }
+      const informacion = await contrato.json();
+      if (informacion?.facturacion?.modalidad !== "por_uso" ||
+          informacion.facturacion.precio_centavos !== 400 ||
+          informacion.facturacion.moneda !== "MXN" ||
+          informacion.facturacion.stripe_habilitado !== true ||
+          informacion.facturacion.estado !== "activa") {
+        return res.status(503).json({error:{codigo:"FACTURACION_NO_VERIFICADA"}});
+      }
+    }
     const respuesta = await fetch(dest.baseUrl + dest.prefix + path, {
       method:req.method,
       headers,
