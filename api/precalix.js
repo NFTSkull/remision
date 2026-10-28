@@ -13,6 +13,9 @@ const EVIDENCIA = /^[A-Za-z0-9_-]{6,80}$/;
 const RFC_TEST = "https://precalix.app";
 
 export function obtenerModo(config = process.env) {
+  if (config.REMISION_PRECALIX_MODE === "pilot_real") {
+    return config.REMISION_PRECALIX_REAL_PILOT_ENABLED === "true" ? "pilot_real" : "pilot_blocked";
+  }
   const pagado = config.REMISION_PRECALIX_MODE === "paid";
   if (pagado && config.REMISION_PRECALIX_BILLING_READY !== "true") return "blocked";
   return pagado ? "paid" : "sandbox";
@@ -24,7 +27,7 @@ export function validarPeticionDeCrear(body, modo) {
   if (modo === "sandbox" && body.nss !== NSS_DEMO) return "SOLO_NSS_FICTICIO";
   if (typeof body.idempotency_key !== "string" || !UUID.test(body.idempotency_key)) return "ID_INVALIDO";
   if (body.consentimiento !== true) return "SIN_CONSENTIMIENTO";
-  if (modo === "paid" && (!EVIDENCIA.test(body.evidencia_consentimiento || "") ||
+  if ((modo === "paid" || modo === "pilot_real") && (!EVIDENCIA.test(body.evidencia_consentimiento || "") ||
       body.evidencia_consentimiento.startsWith("consent_demo"))) return "EVIDENCIA_REAL_REQUERIDA";
   if (modo === "sandbox" && !EVIDENCIA.test(body.evidencia_consentimiento || "")) return "EVIDENCIA_INVALIDA";
   return null;
@@ -47,10 +50,11 @@ function resolverProveedor(config, modo) {
   if (u.protocol !== "https:" || u.username || u.password || u.port || u.pathname !== "/" ||
     u.search || u.hash || !(u.hostname === "precalix.app" ||
       /^precalix-[a-z0-9-]+\.vercel\.app$/.test(u.hostname))) return null;
-  const apiKey = modo === "paid" ? config.PRECALIX_B2B_API_KEY : config.PRECALIX_B2B_SANDBOX_KEY;
+  const real = modo === "paid" || modo === "pilot_real";
+  const apiKey = real ? config.PRECALIX_B2B_API_KEY : config.PRECALIX_B2B_SANDBOX_KEY;
   if (typeof apiKey !== "string" ||
-    !(modo === "paid" ? /^pcx_b2b_[A-Za-z0-9_-]{43}$/ : /^pcx_test_[A-Za-z0-9_-]{43}$/).test(apiKey)) return null;
-  return { baseUrl:u.origin, apiKey, prefix:modo === "paid" ? "/api/v1/" : "/api/v1/sandbox/" };
+    !(real ? /^pcx_b2b_[A-Za-z0-9_-]{43}$/ : /^pcx_test_[A-Za-z0-9_-]{43}$/).test(apiKey)) return null;
+  return { baseUrl:u.origin, apiKey, prefix:real ? "/api/v1/" : "/api/v1/sandbox/" };
 }
 
 export default async function handler(req, res) {
@@ -59,14 +63,15 @@ export default async function handler(req, res) {
   const modo = obtenerModo();
   if (req.method === "GET" && req.query?.status === "1") {
     return res.status(200).json({
-      modo: modo === "paid" ? "cobro_por_uso" : "pruebas",
-      disponible: modo !== "blocked",
+      modo: modo === "paid" ? "cobro_por_uso" : modo === "pilot_real" ? "prueba_real" : "pruebas",
+      disponible: modo !== "blocked" && modo !== "pilot_blocked",
       precio_centavos: modo === "paid" ? 400 : 0,
       moneda: "MXN",
-      nota: modo === "paid" ? "MXN 4 por consulta facturable, sin mensualidad" : "Datos simulados, sin consultas ni cargos",
+      nota: modo === "paid" ? "MXN 4 por consulta facturable, sin mensualidad" : modo === "pilot_real" ? "Consulta real con autorización del titular. El piloto no genera cargos al socio." : modo === "pilot_blocked" ? "Piloto real desactivado por seguridad." : "Datos simulados, sin consultas ni cargos",
     });
   }
   if (modo === "blocked") return res.status(503).json({ error: { codigo:"COBROS_NO_CERTIFICADOS" } });
+  if (modo === "pilot_blocked") return res.status(503).json({ error: { codigo:"PILOTO_REAL_NO_HABILITADO" } });
   if (req.method !== "GET" && req.method !== "POST") {
     res.setHeader("Allow", "GET, POST");
     return res.status(405).json({ error: { codigo:"METODO_NO_PERMITIDO" } });
@@ -106,7 +111,7 @@ export default async function handler(req, res) {
     // Doble seguro financiero: cambiar una variable en Remision NO habilita
     // consultas pagadas si el PROVEEDOR no certifica la facturacion por uso.
     // Hoy Precalix devuelve solo la billetera, por lo que falla cerrado.
-    if (modo === "paid") {
+    if (modo === "pilot_real" || modo === "paid") {
       const contrato = await fetch(dest.baseUrl + "/api/v1/cuenta", {
         method: "GET", headers, signal: AbortSignal.timeout(8000),
         cache: "no-store", redirect: "manual",
@@ -116,7 +121,18 @@ export default async function handler(req, res) {
         return res.status(503).json({error:{codigo:"FACTURACION_NO_VERIFICADA"}});
       }
       const informacion = await contrato.json();
-      if (informacion?.facturacion?.modalidad !== "por_uso" ||
+      if (modo === "pilot_real") {
+        if (informacion?.cliente?.estado !== "activo" ||
+            informacion.facturacion?.modalidad !== "piloto_gratis" ||
+            informacion.facturacion.precio_centavos !== 0 ||
+            informacion.facturacion.stripe_habilitado !== false ||
+            informacion.facturacion.estado !== "pruebas_reales" ||
+            !Number.isInteger(informacion?.consumo?.creditos_disponibles) ||
+            informacion.consumo.creditos_disponibles < 1 ||
+            informacion.consumo.consultas_restantes_mes < 1) {
+          return res.status(503).json({error:{codigo:"PILOTO_NO_VERIFICADO"}});
+        }
+      } else if (informacion?.facturacion?.modalidad !== "por_uso" ||
           informacion.facturacion.precio_centavos !== 400 ||
           informacion.facturacion.moneda !== "MXN" ||
           informacion.facturacion.stripe_habilitado !== true ||
