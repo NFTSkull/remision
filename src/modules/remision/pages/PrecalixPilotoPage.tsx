@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 
 type Config = {
@@ -110,7 +110,7 @@ export function PrecalixPilotoPage(){
     return()=>clearInterval(interval);
   },[consultando,consulta?.id,leer]);
 
-  const comenzar=async(event:React.FormEvent<HTMLFormElement>)=>{
+  const comenzar=async(event:FormEvent<HTMLFormElement>)=>{
     event.preventDefault();
     if(!autorizado||!config?.disponible){setError('No tienes acceso activo a la consulta.');return;}
     if(enviando||enCurso.current)return;
