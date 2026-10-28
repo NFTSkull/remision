@@ -484,3 +484,26 @@ select:focus {
     width: 100%;
   }
 }
+
+/* Piloto Precalix B2B — aislado de los formularios de remisiones */
+.pilot-page{max-width:940px;margin:0 auto}
+.pilot-hero{display:flex;align-items:center;justify-content:space-between;gap:1rem;padding:1.5rem;margin-bottom:1.4rem;background:linear-gradient(110deg,#e8f5ec,#fff);border:1px solid var(--verde-border);border-radius:12px}
+.pilot-hero small,.pilot-overview small{font-size:.72rem;letter-spacing:.1em;color:var(--verde-dark);font-weight:700}
+.pilot-hero h2{font-size:1.35rem;color:var(--verde-dark);margin:.35rem 0}
+.pilot-hero p,.pilot-description,.pilot-disclaimer{color:var(--gris-muted);font-size:.88rem;line-height:1.6}
+.pilot-state{font-size:.8rem;color:var(--verde-dark);background:#fff;padding:.55rem .8rem;border:1px solid var(--verde-border);border-radius:100px;white-space:nowrap;font-weight:600}
+.pilot-cases{display:flex;gap:.5rem;flex-wrap:wrap;margin:1.4rem 0}
+.pilot-cases button{cursor:pointer;background:#fff;border:1px solid var(--verde-border);color:var(--verde-dark);border-radius:6px;padding:.5rem .8rem}
+.pilot-cases button.active{background:var(--verde-dark);color:#fff}
+.pilot-consent{display:flex;flex-direction:row;align-items:flex-start;gap:.75rem;margin:1.1rem 0}
+.pilot-consent input{margin-top:.2rem;width:17px;height:17px;flex-shrink:0}
+.pilot-evidence{margin-top:1rem;max-width:500px}
+.pilot-overview{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1rem;padding:1rem;border-radius:8px;background:var(--verde-light)}
+.pilot-overview>div{display:flex;flex-direction:column;gap:.3rem;min-width:0;overflow-wrap:anywhere}
+.pilot-results h2{margin-bottom:1rem}
+.pilot-amounts{margin-top:1rem;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.5rem}
+.pilot-amounts>div{display:flex;flex-direction:column;gap:.1rem;padding:.85rem;background:#fafafa;border:1px solid #eee;border-radius:8px}
+.pilot-amounts span{font-size:.8rem;text-transform:capitalize;color:var(--gris-muted)}
+.pilot-amounts strong{color:var(--verde-dark)}
+.pilot-disclaimer{margin-top:1rem}
+@media(max-width:640px){.pilot-hero{align-items:flex-start;flex-direction:column}.pilot-overview,.pilot-amounts{grid-template-columns:1fr}.pilot-cases button{flex:1 1 auto}}
