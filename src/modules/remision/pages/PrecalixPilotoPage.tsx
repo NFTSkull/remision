@@ -29,6 +29,7 @@ type Precalificacion = {
 };
 type Respuesta = { precalificacion?:Precalificacion; sandbox?:boolean; error?:{codigo:string} };
 const UUID_DEMO = 'd5f2462d-a100-4d58-8f1d-46734479eb20';
+const ULTIMO_ID = 'remision_precalix_ultima_consulta_v1';
 const moneda = new Intl.NumberFormat('es-MX',{style:'currency',currency:'MXN',maximumFractionDigits:2});
 const IMPORTE = (n:number|null|undefined) => n===null||n===undefined ? 'No informado' : moneda.format(n);
 
@@ -98,11 +99,28 @@ export function PrecalixPilotoPage(){
       if(!data.precalificacion)throw Error('No recibimos el resultado.');
       setConsulta(data.precalificacion);
       setSandbox(data.sandbox===true);
-      if(!data.precalificacion.en_proceso){enCurso.current=false;setConsultando(false);}
+      if(data.precalificacion.en_proceso){enCurso.current=true;setConsultando(true);}
+      else {enCurso.current=false;setConsultando(false);}
       setError('');
     }catch(e){setError(e instanceof Error?e.message:'No se pudo actualizar la consulta.');}
     finally{inFlight.current=false;}
   },[]);
+
+  useEffect(()=>{
+    if(!autorizado || !config?.disponible)return;
+    try{
+      const saved=sessionStorage.getItem(ULTIMO_ID);
+      if(!saved)return;
+      const item=JSON.parse(saved) as {id?:string;vence?:number};
+      if(typeof item.id!=='string' || !/^[a-f0-9-]{36}$/i.test(item.id) ||
+          !item.vence || item.vence<Date.now()){
+        sessionStorage.removeItem(ULTIMO_ID);
+        return;
+      }
+      iniciado.current=Date.now();
+      void leer(item.id);
+    }catch{sessionStorage.removeItem(ULTIMO_ID);}
+  },[autorizado,config?.disponible,leer]);
 
   useEffect(()=>{
     if(!consultando||!consulta?.id)return;
@@ -146,6 +164,9 @@ export function PrecalixPilotoPage(){
       if(!data.precalificacion?.id)throw Error('No recibimos identificador de consulta.');
       setConsulta(data.precalificacion);
       setSandbox(data.sandbox===true);
+      // Solo el identificador de la ultima consulta vive en esta pestaña,
+      // no se almacenan NSS, RFC, nombres, resultados ni la clave API.
+      sessionStorage.setItem(ULTIMO_ID,JSON.stringify({id:data.precalificacion.id,vence:Date.now()+8*60*60*1000}));
       setConsultando(Boolean(data.precalificacion.en_proceso));
       enCurso.current=Boolean(data.precalificacion.en_proceso);
       await leer(data.precalificacion.id);
@@ -156,6 +177,7 @@ export function PrecalixPilotoPage(){
   const cambiaNss=(value:string)=>{
     const nuevo=value.replace(/\D/g,'').slice(0,11);
     setNss(nuevo);setError('');
+    if(nuevo !== nss){setConsulta(null);setConsultando(false);enCurso.current=false;sessionStorage.removeItem(ULTIMO_ID);}
     if(ultimoIntento.current?.nss!==nuevo)ultimoIntento.current=null;
   };
   const detalle=consulta?.resultado;
