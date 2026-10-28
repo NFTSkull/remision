@@ -96,6 +96,65 @@ describe('Proxy de Remision: demo sin cargos ni credenciales en navegador',()=>{
     delete process.env.REMISION_PRECALIX_BILLING_READY;
     delete process.env.PRECALIX_B2B_API_KEY;
   });
+  it('piloto real requiere dos banderas y no activa facturación comercial',()=>{
+    assert.equal(obtenerModo({REMISION_PRECALIX_MODE:'pilot_real'}),'pilot_blocked');
+    assert.equal(obtenerModo({REMISION_PRECALIX_MODE:'pilot_real',REMISION_PRECALIX_REAL_PILOT_ENABLED:'true'}),'pilot_real');
+    assert.equal(validarPeticionDeCrear({
+      nss:'12345678901',idempotency_key:uuid,consentimiento:true,
+      evidencia_consentimiento:'consent_demo01',
+    },'pilot_real'),'EVIDENCIA_REAL_REQUERIDA');
+  });
+  it('piloto real con cuenta sin cortesía NO envía ninguna consulta',async()=>{
+    process.env.REMISION_PRECALIX_MODE='pilot_real';
+    process.env.REMISION_PRECALIX_REAL_PILOT_ENABLED='true';
+    process.env.PRECALIX_B2B_API_KEY='pcx_b2b_'+'b'.repeat(43);
+    let posts=0;
+    globalThis.fetch=async(url,opts)=>{
+      if(opts.method==='POST')posts++;
+      if(String(url).endsWith('/api/v1/cuenta')) return Response.json({
+        cliente:{estado:'activo'},
+        facturacion:{modalidad:'piloto_gratis',precio_centavos:0,
+          stripe_habilitado:false,estado:'pruebas_reales'},
+        consumo:{creditos_disponibles:0,consultas_restantes_mes:2},
+      });
+      throw Error('No');
+    };
+    const a=mockRes();
+    await handler(req('POST',{nss:'12345678901',idempotency_key:uuid,
+      consentimiento:true,evidencia_consentimiento:'consent_autorizado123'}),a);
+    assert.equal(a.statusCode,503);assert.equal(a.data.error.codigo,'PILOTO_NO_VERIFICADO');
+    assert.equal(posts,0);
+    delete process.env.REMISION_PRECALIX_MODE;
+    delete process.env.REMISION_PRECALIX_REAL_PILOT_ENABLED;
+    delete process.env.PRECALIX_B2B_API_KEY;
+  });
+  it('piloto real autorizado usa el motor real y no requiere contrato de cobro Stripe',async()=>{
+    process.env.REMISION_PRECALIX_MODE='pilot_real';
+    process.env.REMISION_PRECALIX_REAL_PILOT_ENABLED='true';
+    process.env.PRECALIX_B2B_API_KEY='pcx_b2b_'+'b'.repeat(43);
+    const llamadas=[];
+    globalThis.fetch=async(url,opts)=>{
+      llamadas.push({url:String(url),method:opts.method,body:opts.body});
+      if(String(url).endsWith('/api/v1/cuenta')) return Response.json({
+        cliente:{estado:'activo'},
+        facturacion:{modalidad:'piloto_gratis',precio_centavos:0,
+          stripe_habilitado:false,estado:'pruebas_reales'},
+        consumo:{creditos_disponibles:5,consultas_restantes_mes:5},
+      });
+      return Response.json({precalificacion:{id:uuid,estado:'pendiente',en_proceso:true}},{status:202});
+    };
+    const a=mockRes();
+    await handler(req('POST',{nss:'12345678901',idempotency_key:uuid,
+      consentimiento:true,evidencia_consentimiento:'consent_autorizado123'}),a);
+    assert.equal(a.statusCode,202);
+    assert.equal(llamadas.length,2);
+    assert.equal(llamadas[0].url,'https://precalix.app/api/v1/cuenta');
+    assert.equal(llamadas[1].url,'https://precalix.app/api/v1/precalificaciones');
+    assert.ok(!JSON.stringify(a.data).includes('pcx_b2b_'));
+    delete process.env.REMISION_PRECALIX_MODE;
+    delete process.env.REMISION_PRECALIX_REAL_PILOT_ENABLED;
+    delete process.env.PRECALIX_B2B_API_KEY;
+  });
   it('solo permite el proveedor oficial o un preview de Precalix',async()=>{
     process.env.PRECALIX_B2B_BASE_URL='https://ejemplo-malicioso.com';
     let llamadas=0;globalThis.fetch=async()=>{llamadas++;throw Error('No');};
