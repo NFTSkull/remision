@@ -155,6 +155,22 @@ describe('Proxy de Remision: demo sin cargos ni credenciales en navegador',()=>{
     delete process.env.REMISION_PRECALIX_REAL_PILOT_ENABLED;
     delete process.env.PRECALIX_B2B_API_KEY;
   });
+  it('permite leer una consulta anterior aunque la cortesía llegue a cero',async()=>{
+    process.env.REMISION_PRECALIX_MODE='pilot_real';
+    process.env.REMISION_PRECALIX_REAL_PILOT_ENABLED='true';
+    process.env.PRECALIX_B2B_API_KEY='pcx_b2b_'+'b'.repeat(43);
+    const urls=[];
+    globalThis.fetch=async(url,opts)=>{
+      urls.push(String(url));
+      return Response.json({precalificacion:{id:uuid,estado:'exitosa',en_proceso:false}});
+    };
+    const a=mockRes();await handler(req('GET',null,{id:uuid}),a);
+    assert.equal(a.statusCode,200);
+    assert.deepEqual(urls,['https://precalix.app/api/v1/precalificaciones/'+uuid]);
+    delete process.env.REMISION_PRECALIX_MODE;
+    delete process.env.REMISION_PRECALIX_REAL_PILOT_ENABLED;
+    delete process.env.PRECALIX_B2B_API_KEY;
+  });
   it('solo permite el proveedor oficial o un preview de Precalix',async()=>{
     process.env.PRECALIX_B2B_BASE_URL='https://ejemplo-malicioso.com';
     let llamadas=0;globalThis.fetch=async()=>{llamadas++;throw Error('No');};
