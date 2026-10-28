@@ -216,7 +216,7 @@ export function PrecalixPilotoPage(){
           <small>{consulta?.nss_mascarado?'NSS '+consulta.nss_mascarado:''}</small>
         </div>
         <div className="pilot-main-amounts">
-          <article><span>Monto de crédito</span><strong>{IMPORTE(detalle?.monto_credito)}</strong></article>
+          <article><span>Monto Mejoravit</span><strong>{IMPORTE(detalle?.monto_credito)}</strong></article>
           <article><span>Capacidad de compra</span><strong>{IMPORTE(detalle?.capacidad_compra)}</strong></article>
         </div>
         <div className="pilot-detail-list">
