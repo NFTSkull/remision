@@ -19,7 +19,7 @@ describe("Acceso simple: la clave nunca forma parte del formulario NSS",()=>{
     assert.equal(tieneSesion({headers:{cookie}},cfg,Date.UTC(2026,9,29)),false);
     const adulterada=cookie.slice(0,-1)+(cookie.endsWith("a")?"b":"a");
     assert.equal(tieneSesion({headers:{cookie:adulterada}},cfg,Date.UTC(2026,9,28)+5000),false);
-    assert.equal(autenticarOperador({headers:{cookie}},cfg,Date.UTC(2026,9,28)+5000),false); // usa hora actual
+    assert.equal(autenticarOperador({headers:{"x-pilot-token":codigo}},cfg),true);
   });
   it("la demo solo omite acceso en previews y nunca en modo real",()=>{
     const flags={VERCEL_ENV:"preview",REMISION_PRECALIX_SANDBOX_OPEN_DEMO:"true"};
