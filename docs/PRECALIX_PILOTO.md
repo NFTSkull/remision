@@ -72,7 +72,12 @@ Para cobrar $4 por precalificación, además de la integración HTTP se requiere
   control: el portal impone límites, concurrencia y disponibilidad.
 
 Para impedir cobros inesperados, el proxy está cerrado por defecto para modo
-real y el cambio de configuración no debe realizarse hasta validar el motor.
+real. **Aunque se cambien ambas variables**, el proxy exige una respuesta
+verificable del proveedor en GET /api/v1/cuenta con
+`facturacion.modalidad=por_uso`, `precio_centavos=400`, `moneda=MXN`,
+`stripe_habilitado=true` y `estado=activa`; actualmente Precalix NO los entrega,
+así que un simple cambio de bandera no permite generar consultas de pago.
+El contrato nunca debe marcarse activo antes de que Stripe haya sido probado.
 
 ## Seguridad y limitaciones
 
