@@ -73,6 +73,29 @@ describe('Proxy de Remision: demo sin cargos ni credenciales en navegador',()=>{
     assert.equal(llamadas,0);
     delete process.env.REMISION_PRECALIX_MODE;
   });
+  it('ni con flags activadas envía POST pagado sin validación de Stripe por Precalix', async()=>{
+    process.env.REMISION_PRECALIX_MODE='paid';
+    process.env.REMISION_PRECALIX_BILLING_READY='true';
+    process.env.PRECALIX_B2B_API_KEY='pcx_b2b_'+'b'.repeat(43);
+    let posts=0;
+    globalThis.fetch=async(url,opts)=>{
+      if(opts.method==='POST')posts++;
+      if(String(url).endsWith('/api/v1/cuenta'))return Response.json({
+        cliente:{estado:'activo'},consumo:{creditos_disponibles:200},
+      });
+      throw Error('No debe invocar POST ni consultas reales');
+    };
+    const a=mockRes();await handler(req('POST',{
+      nss:'12345678901',idempotency_key:uuid,consentimiento:true,
+      evidencia_consentimiento:'consent_cliente_autorizado01',
+    }),a);
+    assert.equal(a.statusCode,503);
+    assert.equal(a.data.error.codigo,'FACTURACION_NO_VERIFICADA');
+    assert.equal(posts,0);
+    delete process.env.REMISION_PRECALIX_MODE;
+    delete process.env.REMISION_PRECALIX_BILLING_READY;
+    delete process.env.PRECALIX_B2B_API_KEY;
+  });
   it('solo permite el proveedor oficial o un preview de Precalix',async()=>{
     process.env.PRECALIX_B2B_BASE_URL='https://ejemplo-malicioso.com';
     let llamadas=0;globalThis.fetch=async()=>{llamadas++;throw Error('No');};
