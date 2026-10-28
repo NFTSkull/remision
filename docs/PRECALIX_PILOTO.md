@@ -8,7 +8,8 @@ un proxy de servidor en Vercel que mantiene las claves privadas lejos del navega
 1. **Sandbox gratuito (predeterminado):** solo NSS \`00000000000\`, cinco
    resultados sintéticos según el escenario elegido. No consulta portal,
    no crea jobs, no consume créditos y no cobra.
-2. **Pago por uso (bloqueado):** futura integración B2B de Precalix.
+2. **Piloto REAL gratuito (apagado hasta autorizarlo):** mismo motor real, NSS válido y consentimiento verificable, resultados verdaderos. Consume un crédito INTERNO de cortesía de la cuenta empresarial dedicada, pero cargo al cliente $0; cortesía y cupo definidos previamente.
+3. **Pago por uso (bloqueado):** futura integración B2B de Precalix.
    Tarifa de negocio acordada: **$4 MXN por precalificación facturable,
    IVA incluido**; sin mensualidad ni cupo comercial mensual. Los
    límites técnicos de velocidad y capacidad siguen aplicando.
@@ -30,7 +31,8 @@ Todos estos valores se guardan en el servidor, jamás como variables VITE_*.
 | \`PRECALIX_B2B_SANDBOX_KEY\` | Clave \`pcx_test_...\` creada por el dueño de Precalix |
 | \`PRECALIX_B2B_BASE_URL\` | URL exacta del Preview de Precalix o su dominio oficial |
 | \`PRECALIX_VERCEL_PROTECTION_BYPASS\` | Opcional, secreto de bypass generado en el equipo de Vercel para Preview protegido |
-| \`REMISION_PRECALIX_BILLING_READY\` | Ausente o \`false\`; NO habilitar |
+| `REMISION_PRECALIX_REAL_PILOT_ENABLED` | `false` o ausente; activar solo con clave real, empresa B2B activa, cortesía y migraciones aplicadas |
+| `REMISION_PRECALIX_BILLING_READY` | Ausente o `false`; NO habilitar |
 | \`PRECALIX_B2B_API_KEY\` | Ausente hasta tener empresa real y facturación validada |
 
 Para generar código de acceso operador sin reutilizar la API key:
@@ -57,7 +59,17 @@ Esta prueba no llama a sitios externos. La validación remota de punta a punta
 requiere configurar credenciales **solo en Preview** y resolver la protección
 de acceso del deploy de Precalix; el CI y un Preview READY por sí solos no la sustituyen.
 
-## Activación del modo real (NO ejecutar todavía)
+## Piloto REAL gratuito: cuando el servidor esté certificado
+1. Precalix debe tener módulo B2B publicado y migraciones verificadas, bandera global de B2B encendida, empresa activa, clave real `pcx_b2b_` exclusiva y crédito de cortesía.
+2. En Remisión Preview, configurar `PRECALIX_B2B_API_KEY` (solo servidor) y `REMISION_PRECALIX_MODE=pilot_real`.
+3. Verificar que GET `/api/v1/cuenta` devuelve `facturacion.modalidad=piloto_gratis`, `precio_centavos=0`, `stripe_habilitado=false`, `estado=pruebas_reales`, saldo y cupo positivos.
+4. Configurar `REMISION_PRECALIX_REAL_PILOT_ENABLED=true`, redesplegar y probar únicamente un NSS real de titular autorizado.
+5. Para cerrar, cambiar `REMISION_PRECALIX_REAL_PILOT_ENABLED=false` y redesplegar; o suspender la empresa desde Admin Precalix.
+6. El operador debe guardar evidencia de consentimiento. No probar NSS aleatorios: es una consulta real.
+
+La misma clave `pcx_b2b_` podrá pasar a facturación por uso **sin volver a integrar** cuando Stripe y el ledger estén certificados. Cambiar el modo en Remisión sin un contrato válido de Precalix siempre falla cerrado.
+
+## Activación del modo real DE PAGO (NO ejecutar todavía)
 
 Para cobrar $4 por precalificación, además de la integración HTTP se requiere:
 
