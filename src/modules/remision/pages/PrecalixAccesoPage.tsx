@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 
 export function PrecalixAccesoPage(){
@@ -6,7 +6,7 @@ export function PrecalixAccesoPage(){
   const [error,setError]=useState('');
   const [cargando,setCargando]=useState(false);
   const navigate=useNavigate();
-  const entrar=async(event:React.FormEvent<HTMLFormElement>)=>{
+  const entrar=async(event:FormEvent<HTMLFormElement>)=>{
     event.preventDefault();setError('');
     if(codigo.length<32){setError('Introduce tu código de operador.');return;}
     setCargando(true);
