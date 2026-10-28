@@ -11,6 +11,7 @@ export function AppLayout() {
         <div className="nav-links">
           <Link to="/">Nueva remisión</Link>
           <Link to="/historial">Historial</Link>
+          <Link to="/precalix">Precalix API</Link>
         </div>
       </nav>
       <main className="app-main">

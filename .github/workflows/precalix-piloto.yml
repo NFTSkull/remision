@@ -1,0 +1,30 @@
+name: Remision - piloto seguro Precalix
+on:
+  pull_request:
+    paths:
+      - "api/precalix*"
+      - "src/modules/remision/pages/PrecalixPilotoPage.tsx"
+      - "src/App.tsx"
+      - "src/App.css"
+      - "src/modules/remision/components/AppLayout.tsx"
+      - "vercel.json"
+      - ".github/workflows/precalix-piloto.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: node --test api/precalix.test.mjs api/precalix-auth.test.mjs
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm test -- --run
+      - run: npm run build
