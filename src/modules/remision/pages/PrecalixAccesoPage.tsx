@@ -14,7 +14,10 @@ export function PrecalixAccesoPage(){
       const r=await fetch('/api/precalix-acceso',{method:'POST',cache:'no-store',
         headers:{'Content-Type':'application/json'},body:JSON.stringify({codigo})});
       if(!r.ok)throw Error('El código no es válido o el acceso no está habilitado.');
-      setCodigo('');navigate('/precalix',{replace:true});
+      setCodigo('');
+      const regreso=new URLSearchParams(window.location.search).get('consulta');
+      const idValido=regreso && /^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i.test(regreso);
+      navigate(idValido?'/precalix?consulta='+encodeURIComponent(regreso):'/precalix',{replace:true});
     }catch(e){setError(e instanceof Error?e.message:'No se pudo iniciar sesión.');}
     finally{setCargando(false);}
   };
