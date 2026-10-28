@@ -13,7 +13,7 @@ export default async function handler(req,res) {
     return res.status(503).json({ok:false,motivo:"clave_no_configurada"});
   }
   try {
-    const r=await fetch("https://precalix.app/api/v1/cuenta",{
+    const r=await fetch("https://www.precalix.app/api/v1/cuenta",{
       method:"GET",headers:{Authorization:"Bearer "+key,Accept:"application/json"},
       cache:"no-store",redirect:"manual",signal:AbortSignal.timeout(12000)});
     if(r.status!==200||!(r.headers.get("content-type")||"").includes("application/json"))
