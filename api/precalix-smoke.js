@@ -3,7 +3,6 @@
  * Siempre datos ficticios. Sin NSS real, sin base, sin créditos y sin Stripe.
  * No despliega credenciales al navegador.
  */
-import { createHash } from "node:crypto";
 const UUIDS=["d5f2462d-a100-4d58-8f1d-46734479eb20",
 "d5f2462d-a100-4d58-8f1d-46734479eb21",
 "d5f2462d-a100-4d58-8f1d-46734479eb22",
