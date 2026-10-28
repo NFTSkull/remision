@@ -114,7 +114,7 @@ export default async function handler(req, res) {
     // Doble seguro financiero: cambiar una variable en Remision NO habilita
     // consultas pagadas si el PROVEEDOR no certifica la facturacion por uso.
     // Hoy Precalix devuelve solo la billetera, por lo que falla cerrado.
-    if (modo === "pilot_real" || modo === "paid") {
+    if (req.method === "POST" && (modo === "pilot_real" || modo === "paid")) {
       const contrato = await fetch(dest.baseUrl + "/api/v1/cuenta", {
         method: "GET", headers, signal: AbortSignal.timeout(8000),
         cache: "no-store", redirect: "manual",
