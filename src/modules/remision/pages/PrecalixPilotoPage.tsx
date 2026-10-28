@@ -21,6 +21,9 @@ const textoError = (r:Api) => {
     PROVEEDOR_NO_JSON:'La vista previa necesita autorización de Vercel.',
     PROVEEDOR_NO_DISPONIBLE:'Precalix no respondió. Intenta de nuevo.',
     COBROS_NO_CERTIFICADOS:'Las consultas de pago siguen bloqueadas.',
+    PILOTO_REAL_NO_HABILITADO:'El piloto real todavía está apagado.',
+    PILOTO_NO_VERIFICADO:'Precalix no ha certificado una cuenta de pruebas reales con créditos disponibles.',
+    FACTURACION_NO_VERIFICADA:'No se pueden realizar consultas pagadas sin facturación certificada.',
     SOLO_NSS_FICTICIO:'Solo puedes usar el NSS ficticio 00000000000.',
   };
   return conocidos[codigo??''] ?? ('Servicio no disponible: '+(codigo??'respuesta inválida'));
@@ -39,10 +42,12 @@ export function PrecalixPilotoPage(){
   const [id,setId]=useState<string|null>(null);
   const [respuesta,setRespuesta]=useState<Api|null>(null);
   const [detalle,setDetalle]=useState<Api|null>(null);
-  const real=config?.modo==='cobro_por_uso';
+  const real=config?.modo==='cobro_por_uso'||config?.modo==='prueba_real';
+  const pilotoReal=config?.modo==='prueba_real';
+  const pago=config?.modo==='cobro_por_uso';
   useEffect(()=>{
     fetch('/api/precalix?status=1',{cache:'no-store'})
-      .then(r=>r.json()).then(setConfig).catch(()=>setError('No se pudo cargar la conexión.'));
+      .then(r=>r.json()).then((c:Config)=>{setConfig(c);if(c.modo==='prueba_real'||c.modo==='cobro_por_uso')setNss('');}).catch(()=>setError('No se pudo cargar la conexión.'));
   },[]);
   const api=async(method:'GET'|'POST',uuid:string,body?:object):Promise<Api>=>{
     const r=await fetch('/api/precalix'+(method==='GET'?('?id='+encodeURIComponent(uuid)):''),{
@@ -63,6 +68,7 @@ export function PrecalixPilotoPage(){
     const timer=setInterval(()=>{void cargar(id).catch(()=>setError('Error al actualizar el resultado.'));},6500);
     return()=>clearInterval(timer);
   },[id,detalle?.precalificacion?.en_proceso,token]);
+  const [ultimoIntento,setUltimoIntento]=useState<{firma:string;uuid:string}|null>(null);
   const comenzar=async()=>{
     setError('');
     if(!config?.disponible){setError('La conexión sigue deshabilitada.');return;}
@@ -75,7 +81,10 @@ export function PrecalixPilotoPage(){
       setError('Falta la referencia de consentimiento real.');return;
     }
     setBusy(true);setRespuesta(null);setDetalle(null);
-    const uuid=real?crypto.randomUUID():UUIDS[caso];
+    // Reintentos del MISMO NSS/consentimiento conservan UUID, incluso si falla la red.
+    const firma=real?nss+':'+evidencia+':'+config?.modo:'demo:'+caso;
+    const uuid=ultimoIntento?.firma===firma?ultimoIntento.uuid:real?crypto.randomUUID():UUIDS[caso];
+    setUltimoIntento({firma,uuid});
     setId(uuid);
     try{
       const r=await api('POST',uuid,{
@@ -96,9 +105,9 @@ export function PrecalixPilotoPage(){
     </header>
     <section className="pilot-hero">
       <div><small>ESTADO DE INTEGRACIÓN</small>
-        <h2>{!config?'Comprobando conexión…':real?'Consultas reales por uso':'Pruebas gratuitas · Sandbox'}</h2>
+        <h2>{!config?'Comprobando conexión…':pago?'Consultas reales · $4 por uso':pilotoReal?'Piloto real gratuito':'Pruebas ficticias · Sandbox'}</h2>
         <p>{config?.nota??'Verificando el estado del servidor.'}</p></div>
-      <span className="pilot-state">{real?'$4 por consulta':'Sin cargos'}</span>
+      <span className="pilot-state">{pago?'$4 por consulta':'Sin cargos para el socio'}</span>
     </section>
     <section className="form-section">
       <h2>Solicitar precalificación</h2>
@@ -119,7 +128,7 @@ export function PrecalixPilotoPage(){
         <span>{real?'Confirmo que el titular autorizó la consulta y conservo evidencia.':'Confirmo que estoy probando información completamente ficticia.'}</span>
       </label>
       <div className="actions-row">
-        <button type="button" className="btn btn-primary" onClick={()=>void comenzar()} disabled={busy||!config?.disponible}>{busy?'Consultando…':real?'Solicitar · $4 MXN':'Probar sin costo'}</button>
+        <button type="button" className="btn btn-primary" onClick={()=>void comenzar()} disabled={busy||!config?.disponible}>{busy?'Consultando…':pago?'Solicitar · $4 MXN':pilotoReal?'Precalificar de verdad · gratis':'Probar sin costo'}</button>
         {id&&<button type="button" className="btn btn-outline" onClick={()=>void cargar(id).catch(e=>setError(String(e)))}>Actualizar resultado</button>}
       </div>
       {error&&<p className="alert alert-error" role="alert">{error}</p>}
@@ -133,7 +142,7 @@ export function PrecalixPilotoPage(){
       </div>
       {campos.length>0?<div className="pilot-amounts">{campos.map(([k,v])=><div key={k}><span>{k.replaceAll('_',' ')}</span><strong>{typeof v==='number'?pesos(v):typeof v==='string'?v:'No informado'}</strong></div>)}</div>:
         <p className="pilot-description">{resultado?.en_proceso?'Consultando… Se actualizará automáticamente.':resultado?.motivo??'No hay montos disponibles para este escenario.'}</p>}
-      <p className="pilot-disclaimer">{real?'Consulta real sujeta a facturación de uso.':'Simulación: no utiliza Bansefi, no genera precalificaciones reales ni consume créditos.'}</p>
+      <p className="pilot-disclaimer">{pago?'Consulta real sujeta a facturación de $4 por resultado facturable.':pilotoReal?'Resultado real: el servicio utiliza un crédito operativo de cortesía, pero no cobra a la empresa.':'Simulación: no utiliza Bansefi, no genera precalificaciones reales ni consume créditos.'}</p>
     </section>}
   </div>;
 }
