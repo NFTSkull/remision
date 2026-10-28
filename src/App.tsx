@@ -7,6 +7,7 @@ import {
 import { HistorialPage } from './modules/remision/pages/HistorialPage';
 import { NuevaRemisionPage } from './modules/remision/pages/NuevaRemisionPage';
 import { PrecalixPilotoPage } from './modules/remision/pages/PrecalixPilotoPage';
+import { PrecalixAccesoPage } from './modules/remision/pages/PrecalixAccesoPage';
 import './App.css';
 
 function App() {
@@ -17,6 +18,7 @@ function App() {
           <Route index element={<NuevaRemisionPage />} />
           <Route path="historial" element={<HistorialPage />} />
           <Route path="precalix" element={<PrecalixPilotoPage />} />
+          <Route path="precalix/acceso" element={<PrecalixAccesoPage />} />
           <Route path="editar/:id" element={<EditarRemisionPage />} />
           <Route path="ver/:id" element={<VerRemisionPage />} />
         </Route>
