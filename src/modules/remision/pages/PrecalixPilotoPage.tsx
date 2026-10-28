@@ -109,6 +109,14 @@ export function PrecalixPilotoPage(){
   useEffect(()=>{
     if(!autorizado || !config?.disponible)return;
     try{
+      // Enlace privado a una consulta existente. Solo lectura, sin POST:
+      // no crea trabajos, no consume créditos y exige sesión de operador.
+      const directamente=new URLSearchParams(window.location.search).get('consulta');
+      if(directamente && /^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i.test(directamente)){
+        iniciado.current=Date.now();
+        void leer(directamente);
+        return;
+      }
       const saved=sessionStorage.getItem(ULTIMO_ID);
       if(!saved)return;
       const item=JSON.parse(saved) as {id?:string;vence?:number};
@@ -145,6 +153,7 @@ export function PrecalixPilotoPage(){
       setError('Por ahora solo está activa la demostración con el NSS 00000000000. No se ha habilitado el motor real.');
       return;
     }
+    if(window.location.search)window.history.replaceState(null,'',window.location.pathname);
     setEnviando(true);setError('');setConsulta(null);setSandbox(pruebaFicticia);
     const previo=ultimoIntento.current;
     const id=previo?.nss===nss?previo.id:pruebaFicticia?UUID_DEMO:crypto.randomUUID();
@@ -219,7 +228,9 @@ export function PrecalixPilotoPage(){
       </form>
       {config&&!autorizado&&<div className="pilot-access-note" role="status">
         Para consultar debes iniciar sesión como operador autorizado.
-        <Link to="/precalix/acceso">Ingresar</Link>
+        <Link to={new URLSearchParams(window.location.search).get('consulta')
+          ? '/precalix/acceso?consulta='+encodeURIComponent(new URLSearchParams(window.location.search).get('consulta')??'')
+          : '/precalix/acceso'}>Ingresar</Link>
       </div>}
       {config&&!config.disponible&&<p role="status" className="pilot-access-note">
         Este servicio está temporalmente deshabilitado.
