@@ -10,7 +10,7 @@ import { autenticarOperador, demoPublicaSegura } from "./precalix-auth.js";
 const NSS_DEMO = "00000000000";
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const EVIDENCIA = /^[A-Za-z0-9_-]{6,80}$/;
-const RFC_TEST = "https://precalix.app";
+const RFC_TEST = "https://www.precalix.app";
 
 export function obtenerModo(config = process.env) {
   if (config.REMISION_PRECALIX_MODE === "pilot_real") {
@@ -44,7 +44,7 @@ function resolverProveedor(config, modo) {
   try { u = new URL(baseUrl); } catch { return null; }
   // Solamente el dominio oficial o despliegues propios de Precalix en Vercel.
   if (u.protocol !== "https:" || u.username || u.password || u.port || u.pathname !== "/" ||
-    u.search || u.hash || !(u.hostname === "precalix.app" ||
+    u.search || u.hash || !(u.hostname === "precalix.app" || u.hostname === "www.precalix.app" ||
       /^precalix-[a-z0-9-]+\.vercel\.app$/.test(u.hostname))) return null;
   const real = modo === "paid" || modo === "pilot_real";
   const apiKey = real ? config.PRECALIX_B2B_API_KEY : config.PRECALIX_B2B_SANDBOX_KEY;
